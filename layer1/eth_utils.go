@@ -1,5 +1,3 @@
-// Copyright 2018-2020 Celer Network
-
 package layer1
 
 import (

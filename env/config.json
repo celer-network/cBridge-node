@@ -1,0 +1,89 @@
+{
+  "chainConfig": [
+    {
+      "chainId": 1,
+      "endpoint": "",
+      "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C",
+      "feeRate": 5,
+      "tokenConfig": [
+        {
+          "tokenName": "USDT",
+          "tokenAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "tokenDecimal": 6
+        },
+        {
+          "tokenName": "DAI",
+          "tokenAddress": "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "tokenDecimal": 18
+        },
+        {
+          "tokenName": "USDC",
+          "tokenAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "tokenDecimal": 6
+        },
+        {
+          "tokenName": "BUSD",
+          "tokenAddress": "0x4fabb145d64652a948d72533023f6e7a623c7c53",
+          "tokenDecimal": 18
+        }
+      ],
+      "watchConfig": {
+        "pollingInterval": 10,
+        "blockDelay": 4
+      }
+    },
+    {
+      "chainId": 56,
+      "endpoint": "",
+      "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C",
+      "feeRate": 0,
+      "tokenConfig": [
+        {
+          "tokenName": "USDT",
+          "tokenAddress": "0x55d398326f99059ff775485246999027b3197955",
+          "tokenDecimal": 18
+        },
+        {
+          "tokenName": "DAI",
+          "tokenAddress": "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3",
+          "tokenDecimal": 18
+        },
+        {
+          "tokenName": "USDC",
+          "tokenAddress": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+          "tokenDecimal": 18
+        },
+        {
+          "tokenName": "BUSD",
+          "tokenAddress": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+          "tokenDecimal": 18
+        }
+      ],
+      "watchConfig": {
+        "pollingInterval": 3,
+        "blockDelay": 4
+      }
+    },
+    {
+      "chainId": 42161,
+      "endpoint": "",
+      "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C",
+      "feeRate": 0,
+      "tokenConfig": [
+        {
+          "tokenName": "USDC",
+          "tokenAddress": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+          "tokenDecimal": 6
+        }
+      ],
+      "watchConfig": {
+        "pollingInterval": 3,
+        "blockDelay": 4
+      }
+    }
+  ],
+  "ksPath": "",
+  "ksPwd": "",
+  "db": "127.0.0.1:3333",
+  "gateway": "cbridge-api.celer.network:8081"
+}

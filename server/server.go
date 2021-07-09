@@ -209,7 +209,7 @@ func (s *server) Init(config *cbn.CBridgeConfig) error {
 				return err
 			}
 
-			if curAllowance.Cmp(new(big.Int).Div(MaxUint256, big.NewInt(2))) < 0 && bgc.chainId.Uint64() != 42161 {
+			if curAllowance.Cmp(new(big.Int).Div(MaxUint256, big.NewInt(2))) < 0 {
 				log.Infof("Approving token %s on chain %d...", tokenConfig.GetTokenName(), chainConfig.GetChainId())
 				_, err = bgc.erc20Map[Hex2Addr(tokenConfig.GetTokenAddress())].Approve(authAccount, bgc.contractChain.GetAddr(), MaxUint256)
 				if err != nil {

@@ -40,7 +40,7 @@ You can directly download and unzip the cBridge node binary:
 wget -c https://get.celer.app/cbridgenode/cbridge-node-v1.0-darwin-amd64.tar.gz -O - | tar -xz 
 ```
 
-MD5 Checksum for the unzipped binary: `996a438038f22f139d6ca62ec80e63e6`
+MD5 Checksum for the unzipped binary: `6818aa95bbf41d52789df33fe57b59ca`
 
 - Linux AMD64
 
@@ -48,7 +48,7 @@ MD5 Checksum for the unzipped binary: `996a438038f22f139d6ca62ec80e63e6`
 wget -c https://get.celer.app/cbridgenode/cbridge-node-v1.0-linux-amd64.tar.gz -O - | tar -xz 
 ```
 
-MD5 Checksum for the unzipped binary: `a3b09194c52785d1317ff5198c90375c`
+MD5 Checksum for the unzipped binary: `20320392f979a0f9caa56029a13466ef`
 
 - Linux ARM64
 
@@ -56,7 +56,7 @@ MD5 Checksum for the unzipped binary: `a3b09194c52785d1317ff5198c90375c`
 wget -c https://get.celer.app/cbridgenode/cbridge-node-v1.0-linux-arm64.tar.gz -O - | tar -xz 
 ```
 
-MD5 Checksum for the unzipped binary: `6da93134343369cc146f5e49dc9575ca`
+MD5 Checksum for the unzipped binary: `6d5ed744f95de8b9d243ac73e633ec6a`
 
 ### Build the Source
 

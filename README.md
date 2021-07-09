@@ -81,10 +81,12 @@ If you have checked all of the above items, let's proceed to the relay node conf
 {
   "chainConfig": [
     // Specify the list of chains + tokens the relay node support
-    // NOTE: the chains specified below correspond to the "destination chain"
-    // For example, if the list contains Ethereum Mainnet (chainId=1) with USDT, DAI, USDC, BUSD,
-    // it means your relay node intends to brdige USDT/DAI/USDC/BUSD transfers from other chains
-    // to Ethereum Mainnet
+    // Your node will only relay transfers where both the source and the destination chain
+    // are within the below chain list.
+    // For example, if the list contains Ethereum Mainnet (chainId=1), BSC (chainId=56)
+    // and Arbitrum (chainId=42161), the node can relay (1) Ethereum Mainnet --> BSC
+    // (2) BSC --> Ethereum Mainnet (3) Arbitrum --> Ethereum Mainnet
+    // (4) Ethereum Mainnet --> Arbitrum (5) Arbitrum --> BSC (6) BSC --> Arbitrum
     {
       "chainId": 1, //Ethereum Mainnet
       "endpoint": "", // specify your chain RPC url (e.g., an Infura endpoint)

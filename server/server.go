@@ -746,6 +746,10 @@ func (s *server) processTrySendTransferIn() {
 				continue
 			}
 
+			// if the old fee is recorded, may caused by try send transfer in failed
+			// then we add it back first.
+			originAmt := new(big.Int).Add(&tx.Amount, &tx.Fee)
+
 			gasGwei, getGweiErr := s.getGasPrice(bc.chainId.Uint64())
 			if getGweiErr != nil {
 				log.Warnf("fail to get gas gwei for this transferIn, transfer:%v, err:%v", remoteTransferIn, getGweiErr)
@@ -764,12 +768,13 @@ func (s *server) processTrySendTransferIn() {
 
 			log.Infof("tx:%s, final fee:%s", tx.RelatedTid.String(), finalFee.String())
 
-			if finalFee.Cmp(&tx.Amount) > 0 {
-				log.Errorf("this fee is bigger than amount, transferOutId:%s, fee:%s, amount:%s, err:%v",
-					tx.RelatedTid.String(), finalFee.String(), tx.Amount.String(), getFeeErr)
+			if finalFee.Cmp(originAmt) > 0 {
+				log.Errorf("this fee is bigger than amount, transferOutId:%s, fee:%s, origin amount:%s, err:%v",
+					tx.RelatedTid.String(), finalFee.String(), originAmt.String(), getFeeErr)
 				continue
 			}
-			newAmount := new(big.Int).Sub(&tx.Amount, finalFee)
+
+			newAmount := new(big.Int).Sub(originAmt, finalFee)
 
 			setTransferInAmountAndFeeErr := s.db.SetTransferInAmountAndFee(tx.TransferId, newAmount, finalFee)
 			if setTransferInAmountAndFeeErr != nil {

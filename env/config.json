@@ -29,7 +29,8 @@
       ],
       "watchConfig": {
         "pollingInterval": 10,
-        "blockDelay": 4
+        "blockDelay": 4,
+        "maxBlockDelta": 5000
       }
     },
     {
@@ -61,7 +62,8 @@
       ],
       "watchConfig": {
         "pollingInterval": 3,
-        "blockDelay": 4
+        "blockDelay": 4,
+        "maxBlockDelta": 5000
       }
     },
     {
@@ -78,7 +80,8 @@
       ],
       "watchConfig": {
         "pollingInterval": 3,
-        "blockDelay": 4
+        "blockDelay": 4,
+        "maxBlockDelta": 5000
       }
     }
   ],

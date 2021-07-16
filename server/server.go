@@ -371,8 +371,9 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 
 			chain2TimeLock := time.Now().Add(time.Duration((int64(ev.Timelock)-time.Now().Unix())*2/3) * time.Second)
 			if chain2TimeLock.After(time.Unix(int64(ev.Timelock), 0)) {
-				log.Errorln("fail to insert transfer out, the chain2 time lock is not valid", ev, chain2TimeLock, time.Unix(int64(ev.Timelock), 0))
-				return true
+				// While we will record this transfer in, but this transfer in will never be processed.
+				// Because this time lock is expired.
+				log.Warnf("fail to insert transfer out, the chain2 time lock is not valid", ev, chain2TimeLock, time.Unix(int64(ev.Timelock), 0))
 			}
 			dbErr = s.db.InsertTransfer(&Transfer{
 				TransferId:     getTransferId(ev.Receiver, ev.DstAddress, ev.Hashlock, ev.DstChainId),

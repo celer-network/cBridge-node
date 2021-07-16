@@ -212,14 +212,17 @@ func (_CBridge *CBridgeCaller) Transfers(opts *bind.CallOpts, arg0 [32]byte) (st
 		Timelock uint64
 		Status   uint8
 	})
+	if err != nil {
+		return *outstruct, err
+	}
 
-	outstruct.Sender = out[0].(common.Address)
-	outstruct.Receiver = out[1].(common.Address)
-	outstruct.Token = out[2].(common.Address)
-	outstruct.Amount = out[3].(*big.Int)
-	outstruct.Hashlock = out[4].([32]byte)
-	outstruct.Timelock = out[5].(uint64)
-	outstruct.Status = out[6].(uint8)
+	outstruct.Sender = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+	outstruct.Receiver = *abi.ConvertType(out[1], new(common.Address)).(*common.Address)
+	outstruct.Token = *abi.ConvertType(out[2], new(common.Address)).(*common.Address)
+	outstruct.Amount = *abi.ConvertType(out[3], new(*big.Int)).(**big.Int)
+	outstruct.Hashlock = *abi.ConvertType(out[4], new([32]byte)).(*[32]byte)
+	outstruct.Timelock = *abi.ConvertType(out[5], new(uint64)).(*uint64)
+	outstruct.Status = *abi.ConvertType(out[6], new(uint8)).(*uint8)
 
 	return *outstruct, err
 

@@ -120,8 +120,9 @@ If you have checked all of the above items, let's proceed to the relay node conf
         }
       ],
       "watchConfig": {
-        "pollingInterval": 10, // the polling interval for on-chain event watching (in seconds)
-        "blockDelay": 4 // the block confirmation delay (in blocks)
+        "pollingInterval": 10, // interval (in seconds) to periodically query eth logs
+        "blockDelay": 4, // the block confirmation delay (in blocks)
+        "maxBlockDelta": 5000 // maximum number of blocks for each eth log query
       }
     },
     {
@@ -153,7 +154,8 @@ If you have checked all of the above items, let's proceed to the relay node conf
       ],
       "watchConfig": {
         "pollingInterval": 3,
-        "blockDelay": 4
+        "blockDelay": 4,
+        "maxBlockDelta": 5000
       }
     },
     {
@@ -170,11 +172,12 @@ If you have checked all of the above items, let's proceed to the relay node conf
       ],
       "watchConfig": {
         "pollingInterval": 3,
-        "blockDelay": 4
+        "blockDelay": 4,
+        "maxBlockDelta": 5000
       }
     }
   ],
-  "ksPath": "", // the relay node keystore json file path
+  "ksPath": "", // relay node keystore json file path
   "ksPwd": "", // keystore password (never commit it to public repo)
   "db": "127.0.0.1:3333", // CockroachDB RPC url
   "gateway": "cbridge-api.celer.network:8081" //cBridge gateway server url

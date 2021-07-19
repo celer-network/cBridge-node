@@ -12,8 +12,11 @@ import (
 )
 
 const (
-	transferAllColumns      = "tid,txhash,chainid,token,transfertype,timelock,hashlock,status,relatedtid,relatedchainid,relatedtoken,amount,fee,transfergascost,confirmgascost,refundgascost,preimage,senderaddr,receiveraddr,txconfirmhash,txrefundhash,updatets,createts"
-	transferAllColumnParams = "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23"
+	transferAllColumns             = "tid,txhash,chainid,token,transfertype,timelock,hashlock,status,relatedtid,relatedchainid,relatedtoken,amount,fee,transfergascost,confirmgascost,refundgascost,preimage,senderaddr,receiveraddr,txconfirmhash,txrefundhash,updatets,createts"
+	transferAllColumnParams        = "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23"
+	timeLockSafeMargin             = 6 * time.Minute
+	refundSafeMargin               = 3 * time.Minute
+	maxPendingTimeOutRetryDuration = 1 * time.Hour
 )
 
 type DAL struct {
@@ -108,11 +111,12 @@ type Transfer struct {
 }
 
 func (d *DAL) InsertTransfer(tx *Transfer) error {
+	tsNow := time.Now()
 	q := fmt.Sprintf("INSERT INTO transfer (%s) VALUES (%s) ON CONFLICT DO NOTHING", transferAllColumns, transferAllColumnParams)
 	_, err := d.Exec(q, tx.TransferId.String(), tx.TxHash.String(), tx.ChainId, tx.Token.String(), tx.TransferType,
 		tx.TimeLock, tx.HashLock.String(), tx.Status, tx.RelatedTid.String(), tx.RelatedChainId, tx.RelatedToken.String(), tx.Amount.String(),
 		tx.Fee.String(), tx.TransferGasCost.String(), tx.ConfirmGasCost.String(), tx.ConfirmGasCost.String(), tx.Preimage.String(), tx.Sender.String(), tx.Receiver.String(), tx.TxConfirmHash.String(),
-		tx.TxRefundHash.String(), time.Now(), time.Now())
+		tx.TxRefundHash.String(), tsNow, tsNow)
 	return err
 }
 
@@ -159,8 +163,14 @@ func (d *DAL) SetTransferInAmountAndFee(tid Hash, amount, fee *big.Int) error {
 }
 
 func (d *DAL) SetPendingTransferIn(tid Hash, to, from cbn.TransferStatus) error {
-	q := `UPDATE transfer SET status = $1 WHERE tid = $2 and status = $3`
-	_, err := d.Exec(q, to, tid.String(), from)
+	q := `UPDATE transfer SET status = $1, updatets = $2 WHERE tid = $3 and status = $4`
+	_, err := d.Exec(q, to, time.Now(), tid.String(), from)
+	return err
+}
+
+func (d *DAL) SetTransferStatusByFrom(tid Hash, to, from cbn.TransferStatus) error {
+	q := `UPDATE transfer SET status = $1, updatets = $2 WHERE tid = $3 and status = $4`
+	_, err := d.Exec(q, to, time.Now(), tid.String(), from)
 	return err
 }
 
@@ -218,7 +228,7 @@ func (d *DAL) GetAllTransfersWithLimit(limit uint64) ([]*Transfer, error) {
 
 func (d *DAL) GetAllStartTransferIn() ([]*Transfer, error) {
 	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and timelock > $2 and transfertype = $3", transferAllColumns)
-	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_START, time.Now().Add(3*time.Minute), cbn.TransferType_TRANSFER_TYPE_IN)
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_START, time.Now().Add(timeLockSafeMargin), cbn.TransferType_TRANSFER_TYPE_IN)
 	if err != nil {
 		return nil, err
 	}
@@ -234,9 +244,9 @@ func (d *DAL) GetAllStartTransferIn() ([]*Transfer, error) {
 	return txs, err
 }
 
-func (d *DAL) GetAllPendingTransferIn() ([]*Transfer, error) {
-	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and timelock > $2 and transfertype = $3", transferAllColumns)
-	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_PENDING, time.Now().Add(3*time.Minute), cbn.TransferType_TRANSFER_TYPE_IN)
+func (d *DAL) GetAllConfirmableLockedTransfer() ([]*Transfer, error) {
+	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and timelock > $2 and preimage is not null and preimage != '' and preimage != $3", transferAllColumns)
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, time.Now().Add(timeLockSafeMargin), Hash{}.String())
 	if err != nil {
 		return nil, err
 	}
@@ -252,9 +262,51 @@ func (d *DAL) GetAllPendingTransferIn() ([]*Transfer, error) {
 	return txs, err
 }
 
-func (d *DAL) GetAllLockedTransferIn() ([]*Transfer, error) {
-	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and timelock > $2 and transfertype = $3", transferAllColumns)
-	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, time.Now().Add(3*time.Minute), cbn.TransferType_TRANSFER_TYPE_IN)
+func (d *DAL) GetRecoverTimeoutPendingTransferIn() ([]*Transfer, error) {
+	// We find all pending transfers in which may have do transfer before 1 hour ago, but have not received the monitor.
+	// We will try to send transfer in again for this transfer in. By set the status back to start from pending, the job of transfer in will try send again.
+	// On another hand, if the transfer in time lock is expired, we will ignore this transfer in.
+	tsNow := time.Now()
+	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and updatets < $2 and transfertype = $3 and timelock > $4", transferAllColumns)
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_PENDING, tsNow.Add(-1*maxPendingTimeOutRetryDuration), cbn.TransferType_TRANSFER_TYPE_IN, tsNow.Add(timeLockSafeMargin))
+	if err != nil {
+		return nil, err
+	}
+	defer closeRows(rows)
+	var txs []*Transfer
+	for rows.Next() {
+		tx := &Transfer{}
+		if err = scanTransfers(rows, tx); err != nil {
+			return nil, err
+		}
+		txs = append(txs, tx)
+	}
+	return txs, err
+}
+
+func (d *DAL) GetRecoverTimeoutPendingConfirm() ([]*Transfer, error) {
+	tsNow := time.Now()
+	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and updatets < $2 and timelock > $3", transferAllColumns)
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_CONFIRM_PENDING, tsNow.Add(-1*maxPendingTimeOutRetryDuration), tsNow.Add(timeLockSafeMargin))
+	if err != nil {
+		return nil, err
+	}
+	defer closeRows(rows)
+	var txs []*Transfer
+	for rows.Next() {
+		tx := &Transfer{}
+		if err = scanTransfers(rows, tx); err != nil {
+			return nil, err
+		}
+		txs = append(txs, tx)
+	}
+	return txs, err
+}
+
+func (d *DAL) GetRecoverTimeoutPendingRefund() ([]*Transfer, error) {
+	tsNow := time.Now()
+	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and updatets < $2", transferAllColumns)
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_REFUND_PENDING, tsNow.Add(-1*maxPendingTimeOutRetryDuration))
 	if err != nil {
 		return nil, err
 	}
@@ -272,25 +324,7 @@ func (d *DAL) GetAllLockedTransferIn() ([]*Transfer, error) {
 
 func (d *DAL) GetAllRefundAbleTransferIn() ([]*Transfer, error) {
 	q := fmt.Sprintf(`SELECT %s from transfer where status = $1 and timelock < $2 and transfertype = $3`, transferAllColumns)
-	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, time.Now().Add(-3*time.Minute), cbn.TransferType_TRANSFER_TYPE_IN)
-	if err != nil {
-		return nil, err
-	}
-	defer closeRows(rows)
-	var txs []*Transfer
-	for rows.Next() {
-		tx := &Transfer{}
-		if err = scanTransfers(rows, tx); err != nil {
-			return nil, err
-		}
-		txs = append(txs, tx)
-	}
-	return txs, err
-}
-
-func (d *DAL) GetAllConfirmableTransferOut() ([]*Transfer, error) {
-	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and timelock > $2 and transfertype = $3 and preimage is not null and preimage != '' and preimage != $4", transferAllColumns)
-	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, time.Now().Add(3*time.Minute), cbn.TransferType_TRANSFER_TYPE_OUT, Hash{}.String())
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, time.Now().Add(-1*refundSafeMargin), cbn.TransferType_TRANSFER_TYPE_IN)
 	if err != nil {
 		return nil, err
 	}

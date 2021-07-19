@@ -45,6 +45,8 @@ const (
 	remoteTransferStatusPending   = 1
 	remoteTransferStatusConfirmed = 2
 	remoteTransferStatusRefunded  = 3
+
+	transactorWaitTimeout = 5 * time.Minute
 )
 
 var (
@@ -213,7 +215,7 @@ func (s *server) Init(config *cbn.CBridgeConfig) error {
 				log.Infof("Approving token %s on chain %d...", tokenConfig.GetTokenName(), chainConfig.GetChainId())
 				_, err = bgc.erc20Map[Hex2Addr(tokenConfig.GetTokenAddress())].Approve(authAccount, bgc.contractChain.GetAddr(), MaxUint256)
 				if err != nil {
-					return fmt.Errorf("Error when approving token %s on chain %d: %s", tokenConfig.GetTokenName(), chainConfig.GetChainId(), err)
+					return fmt.Errorf("Error when approving token %s on chain %d: %v", tokenConfig.GetTokenName(), chainConfig.GetChainId(), err)
 				}
 			}
 		}
@@ -283,7 +285,7 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 		StartBlock: bc.mon.GetCurrentBlockNumber(),
 	}
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
-		log.Infof("get monitorLogTransferOut, block number:%d", eLog.BlockNumber)
+		log.Infof("get monitorLogTransferOut, block number:%d, eLog txHash:%x", eLog.BlockNumber, eLog.TxHash)
 		ev := &contracts.CBridgeLogNewTransferOut{}
 		err := bc.contractChain.ParseEvent(evLogTransferOut, eLog, ev)
 		if err != nil {
@@ -291,43 +293,43 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 			return false
 		}
 		if ev.Receiver != s.accountAddr {
-			log.Infof("this transfer out receiver is not current relay node")
+			log.Infof("this transfer out receiver is not current relay node and skip it")
 			return false
 		}
 
 		_, found := s.chainMap[ev.DstChainId]
 		if found {
+			tsNow := time.Now()
 			tokenName, foundTokenName := s.chainTokenNameMap[ev.Token]
 			if !foundTokenName {
-				log.Warnf("fail to get this token name, transferId:%s, token:%s", Hash(ev.TransferId).String(), time.Unix(int64(ev.Timelock), 0).String())
+				log.Warnf("fail to get this token name, transferId:%x, token:%s", ev.TransferId, ev.Token.String())
 				return false
 			}
 
 			dstChainTokenMap, foundDisChainTokenMap := s.chainTokenAddrMap[ev.DstChainId]
 			if !foundDisChainTokenMap {
-				log.Warnf("fail to get this foundDisChainTokenMap, transferId:%s, token:%s", Hash(ev.TransferId).String(), time.Unix(int64(ev.Timelock), 0).String())
+				log.Warnf("fail to get this dst chain, transferId:%x, dst chainId:%d", ev.TransferId, ev.DstChainId)
 				return false
 			}
 			dstToken, foundDstToken := dstChainTokenMap[tokenName]
 			if !foundDstToken {
-				log.Warnf("fail to get this foundDstToken, transferId:%s, token:%s", Hash(ev.TransferId).String(), time.Unix(int64(ev.Timelock), 0).String())
+				log.Warnf("fail to get this dst token, transferId:%x, tokenName:%s", ev.TransferId, tokenName)
 				return false
 			}
 
 			srcTokenDecimal, foundSrcTokenDecimal := s.chainTokenDecimalMap[ev.Token]
 			if !foundSrcTokenDecimal {
-				log.Warnf("fail to get this foundSrcTokenDecimal, transferId:%s, token:%s", Hash(ev.TransferId).String(), time.Unix(int64(ev.Timelock), 0).String())
+				log.Warnf("fail to get this src token decimal, transferId:%x, token:%s", ev.TransferId, ev.Token.String())
 				return false
 			}
 
 			dstTokenDecimal, foundDstTokenDecimal := s.chainTokenDecimalMap[dstToken]
 			if !foundDstTokenDecimal {
-				log.Warnf("fail to get this foundDstTokenDecimal, transferId:%s, token:%s", Hash(ev.TransferId).String(), time.Unix(int64(ev.Timelock), 0).String())
+				log.Warnf("fail to get this dst token decimal, transferId:%x, token:%s", ev.TransferId, dstToken.String())
 				return false
 			}
 
 			dstAmount := ev.Amount
-			log.Infof("srcAmount:%s, srcTokenDecimal:%d, dstTokenDecimal:%d", ev.Amount.String(), srcTokenDecimal, dstTokenDecimal)
 			if srcTokenDecimal > dstTokenDecimal {
 				p := uint64(1)
 				for i := uint64(0); i < (srcTokenDecimal - dstTokenDecimal); i++ {
@@ -341,9 +343,9 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 				}
 				dstAmount = new(big.Int).Mul(ev.Amount, new(big.Int).SetUint64(p))
 			}
-			log.Infof("dstAmount:%s", dstAmount.String())
-
+			log.Infof("transferOutId:%x, srcAmount:%s, srcTokenDecimal:%d, dstTokenDecimal:%d, dstAmt:%s", ev.TransferId, ev.Amount.String(), srcTokenDecimal, dstTokenDecimal, dstAmount.String())
 			// save transfer out
+			log.Infof("save transfer out, transferOutId:%x", ev.TransferId)
 			dbErr := s.db.InsertTransfer(&Transfer{
 				TransferId:     ev.TransferId,
 				TxHash:         eLog.TxHash,
@@ -359,38 +361,40 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 				Amount:         *ev.Amount,
 				Sender:         ev.Sender,
 				Receiver:       ev.Receiver,
-				UpdateTs:       time.Now(),
-				CreateTs:       time.Now(),
+				UpdateTs:       tsNow,
+				CreateTs:       tsNow,
 			})
 			if dbErr != nil {
-				log.Errorf("fail to insert transfer out, ev:%v, err:%v", ev, dbErr)
+				log.Errorf("fail to insert transfer out, should try again, ev:%v, err:%v", ev, dbErr)
 				return true
 			}
 
 			// save transfer in
-
-			chain2TimeLock := time.Now().Add(time.Duration((int64(ev.Timelock)-time.Now().Unix())*2/3) * time.Second)
-			if chain2TimeLock.After(time.Unix(int64(ev.Timelock), 0)) {
-				// While we will record this transfer in, but this transfer in will never be processed.
+			chain2TimeLock := tsNow.Add(time.Duration((int64(ev.Timelock)-tsNow.Unix())*2/3) * time.Second)
+			if chain2TimeLock.After(time.Unix(int64(ev.Timelock-60), 0)) {
+				// here a 60s safe margin to keep transferIn time lock at least diff transferOut timeout 60s.
+				// We will record this transfer in, but this transfer in will never be processed.
 				// Because this time lock is expired.
-				log.Warnf("fail to insert transfer out, the chain2 time lock is not valid", ev, chain2TimeLock, time.Unix(int64(ev.Timelock), 0))
+				log.Warnln("this transfer out is invalid, the chain2 time lock is not valid", ev, chain2TimeLock, time.Unix(int64(ev.Timelock), 0))
 			}
+			transferInId := getTransferId(ev.Receiver, ev.DstAddress, ev.Hashlock, ev.DstChainId)
+			log.Infof("save transfer in, transferInId:%x", transferInId)
 			dbErr = s.db.InsertTransfer(&Transfer{
-				TransferId:     getTransferId(ev.Receiver, ev.DstAddress, ev.Hashlock, ev.DstChainId),
+				TransferId:     transferInId,
 				ChainId:        ev.DstChainId,
 				Token:          dstToken,
 				TransferType:   cbn.TransferType_TRANSFER_TYPE_IN,
 				TimeLock:       chain2TimeLock,
 				HashLock:       ev.Hashlock,
-				Status:         cbn.TransferStatus_TRANSFER_STATUS_START,
+				Status:         cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_START,
 				RelatedTid:     ev.TransferId,
 				RelatedChainId: bc.chainId.Uint64(),
 				RelatedToken:   ev.Token,
 				Amount:         *dstAmount,
 				Sender:         ev.Receiver,
 				Receiver:       ev.DstAddress,
-				UpdateTs:       time.Now(),
-				CreateTs:       time.Now(),
+				UpdateTs:       tsNow,
+				CreateTs:       tsNow,
 			})
 			if dbErr != nil {
 				log.Errorf("fail to insert transfer out, ev:%v, err:%v", ev, dbErr)
@@ -427,13 +431,13 @@ func (s *server) monitorLogTransferIn(bc *bridgeConfig) (monitor.CallbackID, err
 
 		transaction, _, err := bc.ec.TransactionByHash(context.Background(), eLog.TxHash)
 		if err != nil {
-			log.Errorf("monitorLogRefund: cannot get receipt, txHash:%s, err:%v", eLog.TxHash.String(), err)
+			log.Errorf("monitorLogRefund: cannot get receipt, txHash:%x, err:%v", eLog.TxHash, err)
 			return true
 		}
 
 		dbErr := s.db.RecordTransferIn(ev.TransferId, eLog.TxHash, transaction.Cost())
 		if dbErr != nil {
-			log.Errorf("fail to send this transfer in to locked, err:%v", dbErr)
+			log.Errorf("fail to send this transfer in to locked, transferId:%x, err:%v", ev.TransferId, dbErr)
 			return true
 		}
 
@@ -459,7 +463,7 @@ func (s *server) monitorLogConfirm(bc *bridgeConfig) (monitor.CallbackID, error)
 
 		transaction, _, err := bc.ec.TransactionByHash(context.Background(), eLog.TxHash)
 		if err != nil {
-			log.Errorf("monitorLogRefund: cannot get receipt, txHash:%s, err:%v", eLog.TxHash.String(), err)
+			log.Errorf("monitorLogRefund: cannot get receipt, txHash:%x, err:%v", eLog.TxHash, err)
 			return true
 		}
 
@@ -491,12 +495,12 @@ func (s *server) monitorLogRefund(bc *bridgeConfig) (monitor.CallbackID, error) 
 		ev := &contracts.CBridgeLogTransferRefunded{}
 		err := bc.contractChain.ParseEvent(evLogTransferRefunded, eLog, ev)
 		if err != nil {
-			log.Errorf("monitorLogRefund: cannot parse event, txHash:%s, err:%v", eLog.TxHash.String(), err)
+			log.Errorf("monitorLogRefund: cannot parse event, txHash:%x, err:%v", eLog.TxHash, err)
 			return false
 		}
 		transaction, _, err := bc.ec.TransactionByHash(context.Background(), eLog.TxHash)
 		if err != nil {
-			log.Errorf("monitorLogRefund: cannot get receipt, txHash:%s, err:%v", eLog.TxHash.String(), err)
+			log.Errorf("monitorLogRefund: cannot get receipt, txHash:%x, err:%v", eLog.TxHash, err)
 			return true
 		}
 		dbErr := s.db.RefundTransfer(ev.TransferId, eLog.TxHash, transaction.Cost())
@@ -523,10 +527,10 @@ func (s *server) Close() {
 	}
 }
 
-func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLock, transferId, srcTransferId Hash, timeLock, srcChainId, gasGwei, forceGasGwei uint64) error {
-	log.Infof("do transferIn, src transferId: %s", transferId.String())
-	receipt, err := bc.trans.TransactWaitMined(
-		fmt.Sprintf("transferin, transferId:%x", transferId),
+func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLock, transferId, srcTransferId Hash, timeLock, srcChainId uint64) error {
+	log.Infof("start transfer in, transferId:%x, chainId:%d", transferId, bc.chainId.Uint64())
+	_, err := bc.trans.Transact(
+		logTransactionStateHandler(fmt.Sprintf("receipt transferIn, transferId: %x", transferId)),
 		func(ctr bind.ContractTransactor, opts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 			cbt, err2 := contracts.NewCBridgeTransactor(bc.contractChain.GetAddr(), ctr)
 			if err2 != nil {
@@ -534,23 +538,15 @@ func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLoc
 			}
 			return cbt.TransferIn(opts, dstAddr, token, amount, hashLock, timeLock, srcChainId, srcTransferId)
 		},
-		eth.WithMaxGasGwei(gasGwei),
-		eth.WithMinGasGwei(gasGwei),
-		eth.WithTimeout(time.Duration(10)*time.Second),
-		eth.WithForceGasGwei(forceGasGwei),
+		eth.WithTimeout(transactorWaitTimeout),
 	)
-	if err != nil {
-		log.Errorf("fail to transferIn, transferId:%s, err:%v", transferId.String(), err)
-		return err
-	}
-	log.Infof("success to transferIn, txHash:%x", receipt.TxHash)
-	return nil
+	return err
 }
 
-func (bc *bridgeConfig) confirm(transferId, preImage Hash, gasGwei uint64) error {
-	log.Infof("do confirm, transfer id:%s", transferId.String())
-	receipt, err := bc.trans.TransactWaitMined(
-		fmt.Sprintf("confirm with transferId and preImage, transferId:%x", transferId),
+func (bc *bridgeConfig) confirm(transferId, preImage Hash) error {
+	log.Infof("start confirm, transferId:%x, chainId:%d", transferId, bc.chainId.Uint64())
+	_, err := bc.trans.Transact(
+		logTransactionStateHandler(fmt.Sprintf("receipt confirm, transferId: %s", transferId.String())),
 		func(ctr bind.ContractTransactor, opts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 			cbt, err2 := contracts.NewCBridgeTransactor(bc.contractChain.GetAddr(), ctr)
 			if err2 != nil {
@@ -558,21 +554,15 @@ func (bc *bridgeConfig) confirm(transferId, preImage Hash, gasGwei uint64) error
 			}
 			return cbt.Confirm(opts, transferId, preImage)
 		},
-		eth.WithMaxGasGwei(gasGwei),
-		eth.WithMinGasGwei(gasGwei),
-		eth.WithTimeout(time.Duration(10)*time.Second),
+		eth.WithTimeout(transactorWaitTimeout),
 	)
-	if err != nil {
-		log.Errorf("fail to confirm, transferId:%s, err:%v", transferId.String(), err)
-		return err
-	}
-	log.Infof("success to confirm, txHash:%x", receipt.TxHash)
-	return nil
+	return err
 }
 
-func (bc *bridgeConfig) refund(transferId Hash, gasGwei uint64) error {
-	receipt, err := bc.trans.TransactWaitMined(
-		fmt.Sprintf("refund with transferId, transferId:%x", transferId),
+func (bc *bridgeConfig) refund(transferId Hash) error {
+	log.Infof("start refund, transferId:%x, chainId:%d", transferId, bc.chainId.Uint64())
+	_, err := bc.trans.Transact(
+		logTransactionStateHandler(fmt.Sprintf("receipt refund, transferId: %x", transferId)),
 		func(ctr bind.ContractTransactor, opts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 			cbt, err2 := contracts.NewCBridgeTransactor(bc.contractChain.GetAddr(), ctr)
 			if err2 != nil {
@@ -580,16 +570,24 @@ func (bc *bridgeConfig) refund(transferId Hash, gasGwei uint64) error {
 			}
 			return cbt.Refund(opts, transferId)
 		},
-		eth.WithMaxGasGwei(gasGwei),
-		eth.WithMinGasGwei(gasGwei),
-		eth.WithTimeout(time.Duration(10)*time.Second),
+		eth.WithTimeout(transactorWaitTimeout),
 	)
-	if err != nil {
-		log.Infof("fail to refund, transfer id: %s, err:%v", transferId.String(), err)
-		return nil
+	return err
+}
+
+func logTransactionStateHandler(desc string) *eth.TransactionStateHandler {
+	return &eth.TransactionStateHandler{
+		OnMined: func(receipt *ethtypes.Receipt) {
+			if receipt.Status == ethtypes.ReceiptStatusSuccessful {
+				log.Infof("%s transaction %x succeeded", desc, receipt.TxHash)
+			} else {
+				log.Errorf("%s transaction %x failed", desc, receipt.TxHash)
+			}
+		},
+		OnError: func(tx *ethtypes.Transaction, err error) {
+			log.Errorf("%s transaction %x err: %s", desc, tx.Hash(), err)
+		},
 	}
-	log.Infof("success to refund, txHash:%x", receipt.TxHash)
-	return nil
 }
 
 func (bc *bridgeConfig) getTransfer(transferId Hash) (*TransferInfo, error) {
@@ -697,8 +695,6 @@ func (s *server) PingAndRefreshFee() error {
 	}
 
 	s.setGatewayChainInfo(resp.GetChainInfo())
-
-	//log.Infof("ping resp:%v", resp)
 	return nil
 }
 
@@ -708,16 +704,48 @@ func (s *server) setGatewayChainInfo(gatewayChainInfoMap map[uint64]*gatewayrpc.
 	s.gatewayChainInfoMap = gatewayChainInfoMap
 }
 
-func (s *server) ProcessTransfers() {
-	ticker := time.NewTicker(time.Second * 30)
+func (s *server) ProcessSendTransfer() {
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			s.processTrySendTransferIn()
-			s.processTryConfirmTransferIn()
+		}
+	}
+}
+
+func (s *server) ProcessConfirmTransfer() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.processTryConfirmTransfer()
+		}
+	}
+}
+
+func (s *server) ProcessRefundTransferIn() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
 			s.processTryRefundTransferIn()
-			s.processTryConfirmTransferOut()
+		}
+	}
+}
+
+func (s *server) ProcessRecoverTimeoutPendingTransfer() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.processRecoverTimeoutPendingTransferIn()
+			s.processRecoverTimeoutPendingConfirm()
+			s.processRecoverTimeoutPendingRefund()
 		}
 	}
 }
@@ -725,21 +753,21 @@ func (s *server) ProcessTransfers() {
 func (s *server) processTrySendTransferIn() {
 	startedTransferIn, dbErr := s.db.GetAllStartTransferIn()
 	if dbErr != nil {
-		log.Warnf("fail to query waiting for sending transfer in, err:%s", dbErr)
+		log.Warnf("fail to query started transferIn, err:%s", dbErr)
 		return
 	}
 	for _, tx := range startedTransferIn {
 		bc, foundBc := s.chainMap[tx.ChainId]
 		if foundBc {
-			if tx.TimeLock.Add(time.Duration(-1*int64(20)) * time.Second).Before(time.Now()) {
-				log.Warnf("this transfer out is already timeout, transferId:%s, timeLock: %s",
-					tx.TransferId.String(), tx.TimeLock.String())
+			tsNow := time.Now()
+			if tx.TimeLock.Add(time.Duration(-6) * time.Minute).Before(tsNow) {
+				log.Warnf("this transfer out is already timeout, transferId:%x, timeLock: %s", tx.TransferId, tx.TimeLock.String())
 				continue
 			}
 
 			remoteTransferIn, err := bc.getTransfer(tx.TransferId)
 			if err != nil {
-				log.Errorf("fail to get transfer in, txid:%s, err:%v", tx.TransferId.String(), err)
+				log.Errorf("fail to get transfer in, txId:%x, err:%v", tx.TransferId, err)
 				continue
 			}
 			if remoteTransferIn.Status != 0 {
@@ -751,27 +779,16 @@ func (s *server) processTrySendTransferIn() {
 			// then we add it back first.
 			originAmt := new(big.Int).Add(&tx.Amount, &tx.Fee)
 
-			gasGwei, getGweiErr := s.getGasPrice(bc.chainId.Uint64())
-			if getGweiErr != nil {
-				log.Warnf("fail to get gas gwei for this transferIn, transfer:%v, err:%v", remoteTransferIn, getGweiErr)
-				continue
-			}
-			if gasGwei <= 0 {
-				log.Warnf("fail to find gas gwei for this transferIn, transfer:%v", remoteTransferIn)
-				continue
-			}
-
 			finalFee, getFeeErr := s.gateway.GetFee(tx.RelatedTid)
 			if getFeeErr != nil {
-				log.Errorf("can not get the fee for this transfer, transferOutId:%s, err:%v", tx.RelatedTid.String(), getFeeErr)
+				log.Errorf("can not get the fee for this transfer, transferOutId:%x, err:%v", tx.RelatedTid, getFeeErr)
 				continue
 			}
 
 			log.Infof("tx:%s, final fee:%s", tx.RelatedTid.String(), finalFee.String())
 
 			if finalFee.Cmp(originAmt) > 0 {
-				log.Errorf("this fee is bigger than amount, transferOutId:%s, fee:%s, origin amount:%s, err:%v",
-					tx.RelatedTid.String(), finalFee.String(), originAmt.String(), getFeeErr)
+				log.Errorf("this fee is bigger than amount, transferOutId:%x, fee:%s, origin amount:%s, err:%v", tx.RelatedTid, finalFee.String(), originAmt.String(), getFeeErr)
 				continue
 			}
 
@@ -783,128 +800,70 @@ func (s *server) processTrySendTransferIn() {
 				continue
 			}
 
-			sendTransferInErr := bc.transferIn(tx.Receiver, tx.Token, newAmount,
-				tx.HashLock, tx.TransferId, tx.RelatedTid, uint64(tx.TimeLock.Unix()), bc.chainId.Uint64(), gasGwei, bc.config.GetForceGasGwei())
-			if sendTransferInErr != nil {
-				log.Errorf("fail to transferIn, ev:%v, err:%v", tx, sendTransferInErr)
-				continue
-			}
-
-			setDbTransferToPendingErr := s.db.SetPendingTransferIn(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_PENDING,
-				cbn.TransferStatus_TRANSFER_STATUS_START)
+			setDbTransferToPendingErr := s.db.SetPendingTransferIn(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_PENDING,
+				cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_START)
 			if setDbTransferToPendingErr != nil {
 				log.Errorf("fail to set transferIn to pending, ev:%v, err:%v", tx, setDbTransferToPendingErr)
 				continue
 			}
 
-		}
-	}
-}
-
-func (s *server) processTryConfirmTransferIn() {
-	lockedTransferIn, dbErr := s.db.GetAllLockedTransferIn()
-	if dbErr != nil {
-		log.Warnf("fail to query refund able transfers, err:%s", dbErr)
-		return
-	}
-	for _, tx := range lockedTransferIn {
-		transferOut, foundTx, getTxOutDbErr := s.db.GetTransferByTid(tx.RelatedTid)
-		if getTxOutDbErr != nil {
-			log.Warnf("fail to get transfer out by transfer in, tx.RelatedTid:%s, err:%v", tx.RelatedTid.String(), getTxOutDbErr)
-			continue
-		}
-		if !foundTx {
-			log.Warnf("fail to found transfer out by transfer in, tx.RelatedTid:%s", tx.RelatedTid.String())
-			continue
-		}
-		if transferOut.Status != cbn.TransferStatus_TRANSFER_STATUS_CONFIRMED {
-			continue
-		}
-
-		dstBcg, foundBcg := s.chainMap[tx.ChainId]
-		if foundBcg {
-			remoteTransferIn, err := dstBcg.getTransfer(tx.TransferId)
-			if err != nil {
-				log.Errorf("fail to get transfer in, txid:%s, err:%v", tx.TransferId.String(), err)
+			sendTransferInErr := bc.transferIn(tx.Receiver, tx.Token, newAmount, tx.HashLock, tx.TransferId, tx.RelatedTid, uint64(tx.TimeLock.Unix()), bc.chainId.Uint64())
+			if sendTransferInErr != nil {
+				log.Errorf("fail to transferIn, ev:%v, err:%v", tx, sendTransferInErr)
+				// TODO need to check this error, so we can process this transfer again
 				continue
-			}
-			log.Infof("get remote confirmable transfer in:%v", remoteTransferIn)
-			if remoteTransferIn.Status == remoteTransferStatusPending {
-				gasGwei, getGweiErr := s.getGasPrice(dstBcg.chainId.Uint64())
-				if getGweiErr != nil {
-					log.Warnf("fail to get gas gwei for this confirm, transfer:%v, err:%v", remoteTransferIn, getGweiErr)
-					continue
-				}
-				if gasGwei <= 0 {
-					log.Warnf("fail to find gas gwei for this confirm, transfer:%v", remoteTransferIn)
-					continue
-				}
-
-				err = dstBcg.confirm(tx.TransferId, transferOut.Preimage, gasGwei)
-				if err != nil {
-					log.Errorf("fail to confirm related transfer, ev:%v, err:%v", tx, err)
-					continue
-				}
-			} else if remoteTransferIn.Status == remoteTransferStatusRefunded {
-				dbErr = s.db.UpdateTransferStatus(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_REFUNDED)
-				if dbErr != nil {
-					log.Errorf("this transfer is refunded by fail to update the status in db, tx:%v, err:%v", tx, dbErr)
-				}
-			} else if remoteTransferIn.Status == remoteTransferStatusConfirmed {
-				dbErr = s.db.ConfirmTransfer(tx.TransferId, transferOut.Preimage, Hash{}, big.NewInt(0))
-				if dbErr != nil {
-					log.Errorf("fail to update transfer status to confirmed, tx:%v, err:%v", tx, dbErr)
-				}
-			} else {
-				log.Warnf("this transfer in status is invalid, transfer:%v", remoteTransferIn)
 			}
 		}
 	}
 }
 
-func (s *server) processTryConfirmTransferOut() {
-	lockedTransferOut, dbErr := s.db.GetAllConfirmableTransferOut()
+// Once we get the confirm monitor event, we will save the preimage to both transferOut and transferIn.
+// Then we will scan all the transfers(both transferIn and transferOut) status is locked and preimage is not "" ot "0x00000..."
+// Every transfers in db match this condition, we will try to confirm it.
+func (s *server) processTryConfirmTransfer() {
+	lockedTransfer, dbErr := s.db.GetAllConfirmableLockedTransfer()
 	if dbErr != nil {
-		log.Warnf("fail to query confirmable transfer out, err:%s", dbErr)
+		log.Errorf("fail to query confirmable transfers, err:%s", dbErr)
 		return
 	}
-	for _, tx := range lockedTransferOut {
+	for _, tx := range lockedTransfer {
 		dstBcg, foundBcg := s.chainMap[tx.ChainId]
 		if foundBcg {
-			remoteTransferOut, err := dstBcg.getTransfer(tx.TransferId)
+			remoteTransfer, err := dstBcg.getTransfer(tx.TransferId)
 			if err != nil {
-				log.Errorf("fail to get transfer out, txid:%s, err:%v", tx.TransferId.String(), err)
+				log.Errorf("fail to get transfer, txId:%x, err:%v", tx.TransferId, err)
 				continue
 			}
-			log.Infof("get remote confirmable transfer in:%v", remoteTransferOut)
-			if remoteTransferOut.Status == remoteTransferStatusPending {
-				gasGwei, getGweiErr := s.getGasPrice(dstBcg.chainId.Uint64())
-				if getGweiErr != nil {
-					log.Warnf("fail to get gas gwei for this confirm, transfer:%v, err:%v", tx, getGweiErr)
-					continue
+			log.Infof("get remote confirmable transfer:%v", remoteTransfer)
+			if remoteTransfer.Status == remoteTransferStatusPending {
+				dbErr = s.db.SetTransferStatusByFrom(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_CONFIRM_PENDING, cbn.TransferStatus_TRANSFER_STATUS_LOCKED)
+				if dbErr != nil {
+					log.Errorf("update refund to confirm pending failed, tx:%v, err:%v", tx, dbErr)
 				}
-				if gasGwei <= 0 {
-					log.Warnf("fail to find gas gwei for this confirm, transfer:%v", tx)
-					continue
-				}
-				err = dstBcg.confirm(tx.TransferId, tx.Preimage, gasGwei)
+
+				log.Infof("try confirm this tx, txId:%x, txType:%s", tx.TransferId, tx.TransferType.String())
+				err = dstBcg.confirm(tx.TransferId, tx.Preimage)
 				if err != nil {
 					log.Errorf("fail to confirm related transfer, ev:%v, err:%v", tx, err)
 					continue
 				}
-			} else if remoteTransferOut.Status == remoteTransferStatusRefunded {
+			} else if remoteTransfer.Status == remoteTransferStatusRefunded {
 				dbErr = s.db.UpdateTransferStatus(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_REFUNDED)
 				if dbErr != nil {
 					log.Errorf("this transfer is refunded by fail to update the status in db, tx:%v, err:%v", tx, dbErr)
+					continue
 				}
-			} else if remoteTransferOut.Status == remoteTransferStatusConfirmed {
+			} else if remoteTransfer.Status == remoteTransferStatusConfirmed {
 				dbErr = s.db.ConfirmTransfer(tx.TransferId, tx.Preimage, Hash{}, big.NewInt(0))
 				if dbErr != nil {
 					log.Errorf("fail to update transfer status to confirmed, tx:%v, err:%v", tx, dbErr)
+					continue
 				}
 			} else {
-				log.Warnf("this transfer in status is invalid, transfer:%v", tx)
+				log.Warnf("this transfer in status is invalid, transfer:%v", remoteTransfer)
 			}
+		} else {
+			log.Warnf("skip to confirm this tx, because we can not find this chain:%d ,tx:%v", tx.TransferId, tx)
 		}
 	}
 }
@@ -926,7 +885,7 @@ func (s *server) processTryRefundTransferIn() {
 			}
 			log.Infof("get remote refundable transfer in:%v", remoteTransferIn)
 			if remoteTransferIn.Status == remoteTransferStatusPending {
-				gasGwei, getGweiErr := s.getGasPrice(bc.chainId.Uint64())
+				/*gasGwei, getGweiErr := s.getGasPrice(bc.chainId.Uint64())
 				if getGweiErr != nil {
 					log.Warnf("fail to get gas gwei for this refund, transfer:%v, err:%v", remoteTransferIn, getGweiErr)
 					continue
@@ -934,8 +893,14 @@ func (s *server) processTryRefundTransferIn() {
 				if gasGwei <= 0 {
 					log.Warnf("fail to find gas gwei for this refund, transfer:%v", remoteTransferIn)
 					continue
+				}*/
+
+				dbErr = s.db.SetTransferStatusByFrom(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_REFUND_PENDING, cbn.TransferStatus_TRANSFER_STATUS_LOCKED)
+				if dbErr != nil {
+					log.Errorf("fail to update the refund pending status in db, tx:%v, err:%v", tx, dbErr)
 				}
-				err = bc.refund(tx.TransferId, gasGwei)
+
+				err = bc.refund(tx.TransferId)
 				if err != nil {
 					log.Errorf("fail to refund this tx: %v", tx)
 					continue
@@ -953,14 +918,49 @@ func (s *server) processTryRefundTransferIn() {
 	}
 }
 
-func (s *server) getGasPrice(chainId uint64) (uint64, error) {
-	s.gatewayChainInfoMapLock.Lock()
-	defer s.gatewayChainInfoMapLock.Unlock()
-	gatewayChainInfo, foundFee := s.gatewayChainInfoMap[chainId]
-	if !foundFee {
-		return 0, InvalidGasPriceChain
+func (s *server) processRecoverTimeoutPendingTransferIn() {
+	transfers, dbErr := s.db.GetRecoverTimeoutPendingTransferIn()
+	if dbErr != nil {
+		log.Warnf("fail to get timeout pending transfer in, err:%s", dbErr)
+		return
 	}
-	return gatewayChainInfo.GetGasPrice() / 1e9, nil
+	for _, tx := range transfers {
+		dbErr = s.db.SetTransferStatusByFrom(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_START,
+			cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_PENDING)
+		if dbErr != nil {
+			log.Warnf("fail to recover timeout pending transfer in, err:%s", dbErr)
+		}
+	}
+}
+
+func (s *server) processRecoverTimeoutPendingConfirm() {
+	transfers, dbErr := s.db.GetRecoverTimeoutPendingConfirm()
+	if dbErr != nil {
+		log.Warnf("fail to get timeout pending confirm, err:%s", dbErr)
+		return
+	}
+	for _, tx := range transfers {
+		dbErr = s.db.SetTransferStatusByFrom(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_LOCKED,
+			cbn.TransferStatus_TRANSFER_STATUS_CONFIRM_PENDING)
+		if dbErr != nil {
+			log.Warnf("fail to recover timeout pending confirm transfer in, err:%s", dbErr)
+		}
+	}
+}
+
+func (s *server) processRecoverTimeoutPendingRefund() {
+	transfers, dbErr := s.db.GetRecoverTimeoutPendingRefund()
+	if dbErr != nil {
+		log.Warnf("fail to recover timeout pending refund refund, err:%s", dbErr)
+		return
+	}
+	for _, tx := range transfers {
+		dbErr = s.db.SetTransferStatusByFrom(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_LOCKED,
+			cbn.TransferStatus_TRANSFER_STATUS_REFUND_PENDING)
+		if dbErr != nil {
+			log.Warnf("fail to recover timeout pending refund transfer in, err:%s", dbErr)
+		}
+	}
 }
 
 func (s *server) GetTotalSummary(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {

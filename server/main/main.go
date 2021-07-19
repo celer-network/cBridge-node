@@ -43,7 +43,10 @@ func main() {
 	log.Infof("cBridge relay node successfully starts")
 
 	go s.PingCron()
-	go s.ProcessTransfers()
+	go s.ProcessSendTransfer()
+	go s.ProcessConfirmTransfer()
+	go s.ProcessRefundTransferIn()
+	go s.ProcessRecoverTimeoutPendingTransfer()
 
 	webRouter := httprouter.New()
 	webRouter.GET("/v1/summary/total", s.GetTotalSummary)

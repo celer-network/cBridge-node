@@ -705,7 +705,7 @@ func (s *server) setGatewayChainInfo(gatewayChainInfoMap map[uint64]*gatewayrpc.
 }
 
 func (s *server) ProcessSendTransfer() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -716,7 +716,7 @@ func (s *server) ProcessSendTransfer() {
 }
 
 func (s *server) ProcessConfirmTransfer() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -738,7 +738,7 @@ func (s *server) ProcessRefundTransferIn() {
 }
 
 func (s *server) ProcessRecoverTimeoutPendingTransfer() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {

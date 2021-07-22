@@ -539,7 +539,7 @@ func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLoc
 			return cbt.TransferIn(opts, dstAddr, token, amount, hashLock, timeLock, srcChainId, srcTransferId)
 		},
 		eth.WithTimeout(transactorWaitTimeout),
-		eth.WithAddGasEstimateRatio(0.3),
+		eth.WithAddGasEstimateRatio(1.0),
 	)
 	return err
 }
@@ -556,7 +556,7 @@ func (bc *bridgeConfig) confirm(transferId, preImage Hash) error {
 			return cbt.Confirm(opts, transferId, preImage)
 		},
 		eth.WithTimeout(transactorWaitTimeout),
-		eth.WithAddGasEstimateRatio(0.3),
+		eth.WithAddGasEstimateRatio(1.0),
 	)
 	return err
 }
@@ -573,7 +573,7 @@ func (bc *bridgeConfig) refund(transferId Hash) error {
 			return cbt.Refund(opts, transferId)
 		},
 		eth.WithTimeout(transactorWaitTimeout),
-		eth.WithAddGasEstimateRatio(0.3),
+		eth.WithAddGasEstimateRatio(1.0),
 	)
 	return err
 }

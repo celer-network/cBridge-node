@@ -539,6 +539,7 @@ func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLoc
 			return cbt.TransferIn(opts, dstAddr, token, amount, hashLock, timeLock, srcChainId, srcTransferId)
 		},
 		eth.WithTimeout(transactorWaitTimeout),
+		eth.WithAddGasEstimateRatio(0.3),
 	)
 	return err
 }
@@ -555,6 +556,7 @@ func (bc *bridgeConfig) confirm(transferId, preImage Hash) error {
 			return cbt.Confirm(opts, transferId, preImage)
 		},
 		eth.WithTimeout(transactorWaitTimeout),
+		eth.WithAddGasEstimateRatio(0.3),
 	)
 	return err
 }
@@ -571,6 +573,7 @@ func (bc *bridgeConfig) refund(transferId Hash) error {
 			return cbt.Refund(opts, transferId)
 		},
 		eth.WithTimeout(transactorWaitTimeout),
+		eth.WithAddGasEstimateRatio(0.3),
 	)
 	return err
 }
@@ -885,16 +888,6 @@ func (s *server) processTryRefundTransferIn() {
 			}
 			log.Infof("get remote refundable transfer in:%v", remoteTransferIn)
 			if remoteTransferIn.Status == remoteTransferStatusPending {
-				/*gasGwei, getGweiErr := s.getGasPrice(bc.chainId.Uint64())
-				if getGweiErr != nil {
-					log.Warnf("fail to get gas gwei for this refund, transfer:%v, err:%v", remoteTransferIn, getGweiErr)
-					continue
-				}
-				if gasGwei <= 0 {
-					log.Warnf("fail to find gas gwei for this refund, transfer:%v", remoteTransferIn)
-					continue
-				}*/
-
 				dbErr = s.db.SetTransferStatusByFrom(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_REFUND_PENDING, cbn.TransferStatus_TRANSFER_STATUS_LOCKED)
 				if dbErr != nil {
 					log.Errorf("fail to update the refund pending status in db, tx:%v, err:%v", tx, dbErr)

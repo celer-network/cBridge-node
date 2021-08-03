@@ -17,15 +17,15 @@ cBridge relay node uses CockroachDB to save transfer records. Please follow the 
 2. Start CockroachDB
 
 ```sh
-cockroach start-single-node --insecure --listen-addr=localhost:3333 --store=path=/tmp/relaynode_sql_db
+cockroach start-single-node --insecure --listen-addr=localhost:26257 --store=path=/tmp/relaynode_sql_db
 ```
 
-Note that `3333` is the RPC port. You can change it to any port you prefer but please note it down as you will need it  later when configuring the relay node.
+Note that `26257` is the RPC port. You can change it to any port you prefer but please note it down as you will need it  later when configuring the relay node.
 
 3. Under the root of this repo, execute the following command to initialize the DB table for the relay node:
 
 ```sh
-cockroach sql --insecure --host=127.0.0.1 --port=3333 --database=cbridge < ./server/schema.sql
+cockroach sql --insecure --host=127.0.0.1 --port=26257 --database=cbridge < ./server/schema.sql
 ```
 
 ## Get cBridge Node Binanry
@@ -179,7 +179,7 @@ If you have checked all of the above items, let's proceed to the relay node conf
   ],
   "ksPath": "", // relay node keystore json file path
   "ksPwd": "", // keystore password (never commit it to public repo)
-  "db": "127.0.0.1:3333", // CockroachDB RPC url
+  "db": "127.0.0.1:26257", // CockroachDB RPC url
   "gateway": "cbridge-api.celer.network:8081" //cBridge gateway server url
 }
 ```

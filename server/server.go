@@ -214,6 +214,7 @@ func (s *server) Init(config *cbn.CBridgeConfig) error {
 			if curAllowance.Cmp(new(big.Int).Div(MaxUint256, big.NewInt(2))) < 0 {
 				log.Infof("Approving token %s on chain %d...", tokenConfig.GetTokenName(), chainConfig.GetChainId())
 				_, err = bgc.erc20Map[Hex2Addr(tokenConfig.GetTokenAddress())].Approve(authAccount, bgc.contractChain.GetAddr(), MaxUint256)
+				// here okchain return err "Error when approving token USDT on chain 66: method handler crashed", here "method handler crashed" is the error
 				if err != nil {
 					return fmt.Errorf("Error when approving token %s on chain %d: %v", tokenConfig.GetTokenName(), chainConfig.GetChainId(), err)
 				}

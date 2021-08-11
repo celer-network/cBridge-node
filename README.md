@@ -91,7 +91,7 @@ If you have checked all of the above items, let's proceed to the relay node conf
       "chainId": 1, //Ethereum Mainnet
       "endpoint": "", // specify your chain RPC url (e.g., an Infura endpoint)
       "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C", // cBridge contract address
-      "feeRate": 5, // fee percent the node charge for the chain (in unit of 0.01%, 5 means 0.05%)
+      "feeRate": 5, // fee percent the node charge for transfers destined to this chain (in unit of 0.01%, 5 means 0.05%)
       "tokenConfig": [
         // Specify the list of tokens the relay node supports on the chain
         // NOTE: if you specify a token on the chain, the minimum balance requirement should be met

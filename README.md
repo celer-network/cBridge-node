@@ -276,7 +276,7 @@ cBridge relay node relies on a stable blockchain infrasture (e.g., Infura) for o
 
 Here is a simple way to calculate your daily requests to the blockchain infra:
 
-- Suppose your configured pollingInterval = X seconds. Then the number of requests per day per chain is 4320000/X. For example, if X=10, then the daily requests for that chain will be 43200 and your daily request limit should be more than this value.
+- Suppose your configured pollingInterval = X seconds. Then the number of requests per day per chain is 432000/X. For example, if X=10, then the daily requests for that chain will be 43200 and your daily request limit should be more than this value.
 
 **NOTE**: If you use Infura, it is recommended to use a paid plan to ensure your service quality and increase your success rate.
 

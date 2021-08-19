@@ -29,6 +29,8 @@ cockroach sql --insecure --host=127.0.0.1 --port=26257 --database=cbridge < ./se
 ```
 
 ## Get cBridge Node Binanry
+We provide cBridge node binary for MacOS, Linux AMD64, inux ARM64
+You can get these binary files in release page of this github repo.
 
 ### Download the Binary
 

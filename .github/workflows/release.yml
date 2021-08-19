@@ -1,0 +1,88 @@
+# Build and publish release binaries, on v* tag
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Go 1.14
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.14
+
+      - name: checkout code
+        uses: actions/checkout@v2
+      - name: get version tag
+        id: get_tag
+        run: echo ::set-output name=TAG::${GITHUB_REF/refs\/tags\//}
+
+      - name: Build and tar
+        run: |
+          mkdir cbridgego-linux-amd64
+          pushd cbridgego-linux-amd64
+          LDFLAG="-s -w -X main.version=${{ steps.get_tag.outputs.TAG }} -X main.commit=${GITHUB_SHA::6}"
+          go build -ldflags "$LDFLAG" ../server/main
+          mv main cbridge-node
+          popd
+          tar czf cbridgego-${{ steps.get_tag.outputs.TAG }}-linux-amd64.tar.gz cbridgego-linux-amd64/
+          mkdir cbridgego-linux-arm64
+          pushd cbridgego-linux-arm64
+          LDFLAG="-s -w -X main.version=${{ steps.get_tag.outputs.TAG }} -X main.commit=${GITHUB_SHA::6}"
+          GOARCH=arm64 go build -ldflags "$LDFLAG" ../server/main
+          mv main cbridge-node
+          popd
+          tar czf cbridgego-${{ steps.get_tag.outputs.TAG }}-linux-arm64.tar.gz cbridgego-linux-arm64/
+          mkdir cbridgego-darwin-amd64
+          pushd cbridgego-darwin-amd64
+          LDFLAG="-s -w -X main.version=${{ steps.get_tag.outputs.TAG }} -X main.commit=${GITHUB_SHA::6}"
+          GOOS=darwin go build -ldflags "$LDFLAG" ../server/main
+          mv main cbridge-node
+          popd
+          tar czf cbridgego-${{ steps.get_tag.outputs.TAG }}-darwin-amd64.tar.gz cbridgego-darwin-amd64/
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_tag.outputs.TAG }}
+          release_name: ${{ steps.get_tag.outputs.TAG }}
+          draft: false
+          prerelease: false
+      - name: Upload Release Asset Drawin amd64
+        id: upload-release-asset-drawin-amd64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: ./cbridgego-${{ steps.get_tag.outputs.TAG }}-darwin-amd64.tar.gz
+          asset_name: cbridgego-${{ steps.get_tag.outputs.TAG }}-darwin-amd64.tar.gz
+          asset_content_type: application/gzip
+      - name: Upload Release Asset Linux amd64
+        id: upload-release-asset-linux-amd64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: ./cbridgego-${{ steps.get_tag.outputs.TAG }}-linux-amd64.tar.gz
+          asset_name: cbridgego-${{ steps.get_tag.outputs.TAG }}-linux-amd64.tar.gz
+          asset_content_type: application/gzip
+      - name: Upload Release Asset Linux Arm64
+        id: upload-release-asset-linux-arm64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: ./cbridgego-${{ steps.get_tag.outputs.TAG }}-linux-arm64.tar.gz
+          asset_name: cbridgego-${{ steps.get_tag.outputs.TAG }}-linux-arm64.tar.gz
+          asset_content_type: application/gzip

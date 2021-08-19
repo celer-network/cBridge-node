@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/celer-network/cBridge-go/server"
 	"github.com/celer-network/goutils/log"
@@ -11,12 +12,17 @@ import (
 )
 
 var (
-	port   = flag.Int("p", 8088, "web port used for get relay node stats")
-	config = flag.String("c", "", "config json file path")
+	port    = flag.Int("p", 8088, "web port used for get relay node stats")
+	config  = flag.String("c", "", "config json file path")
+	showver = flag.Bool("v", false, "Show version and exit")
 )
 
 func main() {
 	flag.Parse()
+	if *showver {
+		printver()
+		os.Exit(0)
+	}
 	log.Infoln("Starting cBridge node...")
 	s := server.NewServer()
 	log.Infoln("Loading config file...")
@@ -59,4 +65,14 @@ func startListenAndServeByPort(port int, hanlder http.Handler) {
 	if err != nil {
 		log.Errorf("fail to startListenAndServeByPort, err:%v", err)
 	}
+}
+
+var (
+	version string
+	commit  string
+)
+
+func printver() {
+	fmt.Println("Version:", version)
+	fmt.Println("Commit:", commit)
 }

@@ -29,36 +29,9 @@ cockroach sql --insecure --host=127.0.0.1 --port=26257 --database=cbridge < ./se
 ```
 
 ## Get cBridge Node Binanry
-We provide cBridge node binary for MacOS, Linux AMD64, inux ARM64
+
+We provide cBridge node binary for MacOS, Linux AMD64, Linux ARM64
 You can get these binary files in release page of this github repo.
-
-### Download the Binary
-
-You can directly download and unzip the cBridge node binary:
-
-- MacOS
-
-```sh
-wget -c https://get.celer.app/cbridgenode/cbridge-node-v1.0-darwin-amd64.tar.gz -O - | tar -xz 
-```
-
-MD5 Checksum for the unzipped binary: `6b2e7e6afaff6c0eb32c71daf58ef919`
-
-- Linux AMD64
-
-```sh
-wget -c https://get.celer.app/cbridgenode/cbridge-node-v1.0-linux-amd64.tar.gz -O - | tar -xz 
-```
-
-MD5 Checksum for the unzipped binary: `1d523e578b2e1b0e053dd31135ab19cb`
-
-- Linux ARM64
-
-```sh
-wget -c https://get.celer.app/cbridgenode/cbridge-node-v1.0-linux-arm64.tar.gz -O - | tar -xz 
-```
-
-MD5 Checksum for the unzipped binary: `8b41342f3696c7c973751cc52e9f07b9`
 
 ### Build the Source
 
@@ -185,6 +158,15 @@ If you have checked all of the above items, let's proceed to the relay node conf
   "gateway": "cbridge-api.celer.network:8081" //cBridge gateway server url
 }
 ```
+
+### Recommended BlockDelay and PollingInterval
+| ChainName | ChainId | PollingInterval | BlockDelay |
+| --- | --- | --- | --- |
+| Ethereum mainnet | 1 | 15 | 8 |
+| BSC | 56 | 10 | 8 |
+| Arbitrum | 42161 | 10 | 8 |
+| Polygon | 137 | 15 | 80 |
+| xDai | 100 | 15 | 15 |
 
 ## Start Your Relay Node
 

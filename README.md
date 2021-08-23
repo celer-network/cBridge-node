@@ -160,6 +160,7 @@ If you have checked all of the above items, let's proceed to the relay node conf
 ```
 
 ### Recommended BlockDelay and PollingInterval
+
 | ChainName | ChainId | PollingInterval | BlockDelay |
 | --- | --- | --- | --- |
 | Ethereum mainnet | 1 | 15 | 8 |
@@ -298,7 +299,7 @@ In cBridge, the relay node’s funds are fully non-custodian, which means that t
 
 ### Who can operate a cBridge relay node? Is whitelist required?
 
-cBridge node is open-sourced to the community. Anyone with a machine and liquidity can become a relay node. There is no whitelist.
+cBridge node is open-sourced to the community. Whitelist is required at the current stage to ensure the node quality. Please reach out to the Celer Network team if you are interested in running a cBridge relay node.
 
 ### What is the benefit of running a relay node?
 

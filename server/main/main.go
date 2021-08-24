@@ -19,12 +19,15 @@ var (
 
 func main() {
 	flag.Parse()
+	if version == "" {
+		version = "v1.0.2"
+	}
 	if *showver {
 		printver()
 		os.Exit(0)
 	}
-	log.Infoln("Starting cBridge node...")
-	s := server.NewServer()
+	log.Infof("Starting cBridge node, version:%s  ...", version)
+	s := server.NewServer(version)
 	log.Infoln("Loading config file...")
 	cbConfig, err := server.ParseCfgFile(*config)
 	if err != nil {

@@ -54,6 +54,7 @@ var (
 )
 
 type server struct {
+	version      string
 	cfg          *cbn.CBridgeConfig // config from local json file
 	chainMap     map[uint64]*bridgeConfig
 	chainMapLock sync.Mutex
@@ -65,9 +66,10 @@ type server struct {
 	gatewayChainInfoMap map[uint64]*gatewayrpc.GatewayChainInfo
 
 	//<fromToken, <toChainId, toChainToken>>
-	chainTokenNameMap    map[Addr]string
+	// TODO should add chain id to this map in future, otherwise there may be bug here.
+	chainTokenNameMap    map[uint64]map[Addr]string
 	chainTokenAddrMap    map[uint64]map[string]Addr
-	chainTokenDecimalMap map[Addr]uint64
+	chainTokenDecimalMap map[uint64]map[Addr]uint64
 	chainGasTokenMap     map[uint64]*chainGasTokenInfo
 
 	gatewayChainInfoMapLock sync.Mutex
@@ -94,13 +96,14 @@ type bridgeConfig struct {
 	contractChain layer1.Contract
 }
 
-func NewServer() *server {
+func NewServer(version string) *server {
 	return &server{
+		version:              version,
 		chainMap:             make(map[uint64]*bridgeConfig),
 		gatewayChainInfoMap:  make(map[uint64]*gatewayrpc.GatewayChainInfo),
-		chainTokenNameMap:    make(map[Addr]string),
+		chainTokenNameMap:    make(map[uint64]map[Addr]string),
 		chainTokenAddrMap:    make(map[uint64]map[string]Addr),
-		chainTokenDecimalMap: make(map[Addr]uint64),
+		chainTokenDecimalMap: make(map[uint64]map[Addr]uint64),
 		chainGasTokenMap:     make(map[uint64]*chainGasTokenInfo),
 		quit:                 make(chan bool),
 	}
@@ -180,8 +183,22 @@ func (s *server) Init(config *cbn.CBridgeConfig) error {
 			GasTokenDecimal: chainConfig.GetGasTokenDecimal(),
 		}
 		for _, tokenConfig := range chainConfig.GetTokenConfig() {
-			s.chainTokenNameMap[Hex2Addr(tokenConfig.TokenAddress)] = tokenConfig.GetTokenName()
-			s.chainTokenDecimalMap[Hex2Addr(tokenConfig.TokenAddress)] = tokenConfig.GetTokenDecimal()
+			subChainTokenNameMap, foundSubChainTokenNameMap := s.chainTokenNameMap[chainConfig.GetChainId()]
+			if foundSubChainTokenNameMap {
+				subChainTokenNameMap[Hex2Addr(tokenConfig.TokenAddress)] = tokenConfig.GetTokenName()
+			} else {
+				s.chainTokenNameMap[chainConfig.GetChainId()] = make(map[Addr]string)
+				s.chainTokenNameMap[chainConfig.GetChainId()][Hex2Addr(tokenConfig.TokenAddress)] = tokenConfig.GetTokenName()
+			}
+
+			subChainTokenDecimalMap, foundSubChainTokenDecimalMap := s.chainTokenDecimalMap[chainConfig.GetChainId()]
+			if foundSubChainTokenDecimalMap {
+				subChainTokenDecimalMap[Hex2Addr(tokenConfig.TokenAddress)] = tokenConfig.GetTokenDecimal()
+			} else {
+				s.chainTokenDecimalMap[chainConfig.GetChainId()] = make(map[Addr]uint64)
+				s.chainTokenDecimalMap[chainConfig.GetChainId()][Hex2Addr(tokenConfig.TokenAddress)] = tokenConfig.GetTokenDecimal()
+			}
+
 			if tokenConfig.GetTokenDecimal() <= 0 {
 				return fmt.Errorf("find invalid token decimal, tokenConfig: %v", tokenConfig)
 			}
@@ -215,7 +232,8 @@ func (s *server) Init(config *cbn.CBridgeConfig) error {
 				log.Infof("Approving token %s on chain %d...", tokenConfig.GetTokenName(), chainConfig.GetChainId())
 				_, err = bgc.erc20Map[Hex2Addr(tokenConfig.GetTokenAddress())].Approve(authAccount, bgc.contractChain.GetAddr(), MaxUint256)
 				if err != nil {
-					return fmt.Errorf("Error when approving token %s on chain %d: %v", tokenConfig.GetTokenName(), chainConfig.GetChainId(), err)
+					log.Errorf("can not approve token %s on chain %d", tokenConfig.GetTokenName(), chainConfig.GetChainId())
+					return err
 				}
 			}
 		}
@@ -300,7 +318,7 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 		_, found := s.chainMap[ev.DstChainId]
 		if found {
 			tsNow := time.Now()
-			tokenName, foundTokenName := s.chainTokenNameMap[ev.Token]
+			tokenName, foundTokenName := s.chainTokenNameMap[bc.chainId.Uint64()][ev.Token]
 			if !foundTokenName {
 				log.Warnf("fail to get this token name, transferId:%x, token:%s", ev.TransferId, ev.Token.String())
 				return false
@@ -317,13 +335,13 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 				return false
 			}
 
-			srcTokenDecimal, foundSrcTokenDecimal := s.chainTokenDecimalMap[ev.Token]
+			srcTokenDecimal, foundSrcTokenDecimal := s.chainTokenDecimalMap[bc.chainId.Uint64()][ev.Token]
 			if !foundSrcTokenDecimal {
 				log.Warnf("fail to get this src token decimal, transferId:%x, token:%s", ev.TransferId, ev.Token.String())
 				return false
 			}
 
-			dstTokenDecimal, foundDstTokenDecimal := s.chainTokenDecimalMap[dstToken]
+			dstTokenDecimal, foundDstTokenDecimal := s.chainTokenDecimalMap[ev.DstChainId][dstToken]
 			if !foundDstTokenDecimal {
 				log.Warnf("fail to get this dst token decimal, transferId:%x, token:%s", ev.TransferId, dstToken.String())
 				return false
@@ -400,7 +418,6 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 				log.Errorf("fail to insert transfer out, ev:%v, err:%v", ev, dbErr)
 				return true
 			}
-
 		} else {
 			log.Warnf("fail to get transfer out dst chain, transfer out:%v", ev)
 		}
@@ -415,6 +432,7 @@ func (s *server) monitorLogTransferIn(bc *bridgeConfig) (monitor.CallbackID, err
 		Contract:   bc.contractChain,
 		StartBlock: bc.mon.GetCurrentBlockNumber(),
 	}
+	log.Infof("transferIn monitor config: %+v", cfg)
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
 		log.Infof("get monitorLogTransferIn, block number:%d", eLog.BlockNumber)
 		ev := &contracts.CBridgeLogNewTransferIn{}
@@ -429,13 +447,7 @@ func (s *server) monitorLogTransferIn(bc *bridgeConfig) (monitor.CallbackID, err
 			return false
 		}
 
-		transaction, _, err := bc.ec.TransactionByHash(context.Background(), eLog.TxHash)
-		if err != nil {
-			log.Errorf("monitorLogRefund: cannot get receipt, txHash:%x, err:%v", eLog.TxHash, err)
-			return true
-		}
-
-		dbErr := s.db.RecordTransferIn(ev.TransferId, eLog.TxHash, transaction.Cost())
+		dbErr := s.db.RecordTransferIn(ev.TransferId, eLog.TxHash)
 		if dbErr != nil {
 			log.Errorf("fail to send this transfer in to locked, transferId:%x, err:%v", ev.TransferId, dbErr)
 			return true
@@ -461,13 +473,7 @@ func (s *server) monitorLogConfirm(bc *bridgeConfig) (monitor.CallbackID, error)
 			return false
 		}
 
-		transaction, _, err := bc.ec.TransactionByHash(context.Background(), eLog.TxHash)
-		if err != nil {
-			log.Errorf("monitorLogRefund: cannot get receipt, txHash:%x, err:%v", eLog.TxHash, err)
-			return true
-		}
-
-		dbErr := s.db.ConfirmTransfer(ev.TransferId, ev.Preimage, eLog.TxHash, transaction.Cost())
+		dbErr := s.db.ConfirmTransfer(ev.TransferId, ev.Preimage, eLog.TxHash)
 		if dbErr != nil {
 			log.Errorf("fail to update transfer status to confirmed, ev:%v, err:%v", ev, dbErr)
 			return true
@@ -498,12 +504,8 @@ func (s *server) monitorLogRefund(bc *bridgeConfig) (monitor.CallbackID, error) 
 			log.Errorf("monitorLogRefund: cannot parse event, txHash:%x, err:%v", eLog.TxHash, err)
 			return false
 		}
-		transaction, _, err := bc.ec.TransactionByHash(context.Background(), eLog.TxHash)
-		if err != nil {
-			log.Errorf("monitorLogRefund: cannot get receipt, txHash:%x, err:%v", eLog.TxHash, err)
-			return true
-		}
-		dbErr := s.db.RefundTransfer(ev.TransferId, eLog.TxHash, transaction.Cost())
+
+		dbErr := s.db.RefundTransfer(ev.TransferId, eLog.TxHash)
 		if dbErr != nil {
 			log.Errorf("this transfer is refunded by fail to update the status in db, tx:%v, err:%v", ev, dbErr)
 			return true
@@ -546,6 +548,7 @@ func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLoc
 
 func (bc *bridgeConfig) confirm(transferId, preImage Hash) error {
 	log.Infof("start confirm, transferId:%x, chainId:%d", transferId, bc.chainId.Uint64())
+
 	_, err := bc.trans.Transact(
 		logTransactionStateHandler(fmt.Sprintf("receipt confirm, transferId: %s", transferId.String())),
 		func(ctr bind.ContractTransactor, opts *bind.TransactOpts) (*ethtypes.Transaction, error) {
@@ -668,10 +671,11 @@ func (s *server) PingAndRefreshFee() error {
 		return err
 	}
 	req := &gatewayrpc.PingRequest{
-		EthAddr:   s.accountAddr.String(),
-		ChainInfo: []*gatewayrpc.ChainInfo{},
-		NickName:  s.cfg.GetRelayNodeName(),
-		Sig:       sigMsg,
+		EthAddr:     s.accountAddr.String(),
+		ChainInfo:   []*gatewayrpc.ChainInfo{},
+		NickName:    s.cfg.GetRelayNodeName(),
+		Sig:         sigMsg,
+		NodeVersion: s.version,
 	}
 	for k, v := range s.chainMap {
 		chainInfo := &gatewayrpc.ChainInfo{
@@ -857,7 +861,7 @@ func (s *server) processTryConfirmTransfer() {
 					continue
 				}
 			} else if remoteTransfer.Status == remoteTransferStatusConfirmed {
-				dbErr = s.db.ConfirmTransfer(tx.TransferId, tx.Preimage, Hash{}, big.NewInt(0))
+				dbErr = s.db.ConfirmTransfer(tx.TransferId, tx.Preimage, Hash{})
 				if dbErr != nil {
 					log.Errorf("fail to update transfer status to confirmed, tx:%v, err:%v", tx, dbErr)
 					continue
@@ -892,11 +896,29 @@ func (s *server) processTryRefundTransferIn() {
 				if dbErr != nil {
 					log.Errorf("fail to update the refund pending status in db, tx:%v, err:%v", tx, dbErr)
 				}
-
-				err = bc.refund(tx.TransferId)
-				if err != nil {
-					log.Errorf("fail to refund this tx: %v", tx)
+				// before do refund, we should check the related transfer, if it is already confirmed, then we should confirm this transfer instead of refund it.
+				relatedTransfer, exist, getTransferByRelatedTidErr := s.db.GetTransferByTid(tx.RelatedTid)
+				if getTransferByRelatedTidErr != nil {
+					log.Errorf("fail to get related transfer, RelatedTid:%s, err:%v", tx.RelatedTid.String(), err)
 					continue
+				}
+				if !exist {
+					log.Errorf("fail to get related transfer, not exist, transferId:%s, RelatedTid:%s", tx.TransferId.String(), tx.RelatedTid.String())
+					continue
+				}
+
+				if relatedTransfer.Status == cbn.TransferStatus_TRANSFER_STATUS_CONFIRMED {
+					err = bc.confirm(tx.TransferId, relatedTransfer.Preimage)
+					if err != nil {
+						log.Errorf("fail to confirm this tx: %v", tx)
+						continue
+					}
+				} else {
+					err = bc.refund(tx.TransferId)
+					if err != nil {
+						log.Errorf("fail to refund this tx: %v", tx)
+						continue
+					}
 				}
 			} else if remoteTransferIn.Status == remoteTransferStatusRefunded {
 				dbErr = s.db.UpdateTransferStatus(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_REFUNDED)
@@ -1079,11 +1101,11 @@ func (s *server) recordTransferInSummary(transferIn *Transfer, perChain2ChainSum
 			chain2ChainSummaryFee, foundChain2ChainSummaryFee := chain2ChainSummary.FeeReceived[transferIn.Token]
 			if !foundChain2ChainSummaryFee {
 				chain2ChainSummaryFee = &TokenFeeSummary{
-					TokenName:    s.getTokenName(transferIn.Token),
+					TokenName:    s.getTokenName(transferIn.ChainId, transferIn.Token),
 					TokenAddr:    transferIn.Token,
 					TotalVolume:  new(big.Int),
 					FeeAmount:    new(big.Int),
-					TokenDecimal: s.getTokenDecimal(transferIn.Token),
+					TokenDecimal: s.getTokenDecimal(transferIn.ChainId, transferIn.Token),
 				}
 				chain2ChainSummary.FeeReceived[transferIn.Token] = chain2ChainSummaryFee
 			}
@@ -1110,16 +1132,16 @@ func (s *server) recordTransferOutSummary(transferOut *Transfer, perChain2ChainS
 	chain2ChainSummary.TotalTransferOutNumber++
 }
 
-func (s *server) getTokenName(tokenAddr Addr) string {
-	name, foundName := s.chainTokenNameMap[tokenAddr]
+func (s *server) getTokenName(chainId uint64, tokenAddr Addr) string {
+	name, foundName := s.chainTokenNameMap[chainId][tokenAddr]
 	if !foundName {
 		name = tokenAddr.String()
 	}
 	return name
 }
 
-func (s *server) getTokenDecimal(tokenAddr Addr) uint64 {
-	decimal, found := s.chainTokenDecimalMap[tokenAddr]
+func (s *server) getTokenDecimal(chainId uint64, tokenAddr Addr) uint64 {
+	decimal, found := s.chainTokenDecimalMap[chainId][tokenAddr]
 	if !found {
 		decimal = 1
 	}

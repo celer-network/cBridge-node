@@ -126,21 +126,21 @@ func (d *DAL) SetRelatedTxPreimage(preimage, relatedTid Hash) error {
 	return err
 }
 
-func (d *DAL) ConfirmTransfer(tid, preimage, txConfirmHash Hash, confirmFee *big.Int) error {
-	q := `UPDATE transfer SET status = $1, preimage = $2, txconfirmhash = $3, confirmgascost = $4 WHERE tid = $5`
-	_, err := d.Exec(q, cbn.TransferStatus_TRANSFER_STATUS_CONFIRMED, preimage.String(), txConfirmHash.String(), confirmFee.String(), tid.String())
+func (d *DAL) ConfirmTransfer(tid, preimage, txConfirmHash Hash) error {
+	q := `UPDATE transfer SET status = $1, preimage = $2, txconfirmhash = $3 WHERE tid = $4`
+	_, err := d.Exec(q, cbn.TransferStatus_TRANSFER_STATUS_CONFIRMED, preimage.String(), txConfirmHash.String(), tid.String())
 	return err
 }
 
-func (d *DAL) RefundTransfer(tid, txRefundHash Hash, refundFee *big.Int) error {
-	q := `UPDATE transfer SET status = $1, txrefundhash = $2, refundgascost = $3 WHERE tid = $4`
-	_, err := d.Exec(q, cbn.TransferStatus_TRANSFER_STATUS_REFUNDED, txRefundHash.String(), refundFee.String(), tid.String())
+func (d *DAL) RefundTransfer(tid, txRefundHash Hash) error {
+	q := `UPDATE transfer SET status = $1, txrefundhash = $2 WHERE tid = $3`
+	_, err := d.Exec(q, cbn.TransferStatus_TRANSFER_STATUS_REFUNDED, txRefundHash.String(), tid.String())
 	return err
 }
 
-func (d *DAL) RecordTransferIn(tid, txHash Hash, transferInFee *big.Int) error {
-	q := `UPDATE transfer SET status = $1, txhash = $2, transfergascost = $3 WHERE tid = $4`
-	_, err := d.Exec(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, txHash.String(), transferInFee.String(), tid.String())
+func (d *DAL) RecordTransferIn(tid, txHash Hash) error {
+	q := `UPDATE transfer SET status = $1, txhash = $2 WHERE tid = $3`
+	_, err := d.Exec(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, txHash.String(), tid.String())
 	return err
 }
 

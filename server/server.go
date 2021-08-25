@@ -303,17 +303,17 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 		StartBlock: bc.mon.GetCurrentBlockNumber(),
 	}
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
-		log.Infof("get monitorLogTransferOut, block number:%d, eLog txHash:%x", eLog.BlockNumber, eLog.TxHash)
 		ev := &contracts.CBridgeLogNewTransferOut{}
 		err := bc.contractChain.ParseEvent(evLogTransferOut, eLog, ev)
 		if err != nil {
-			log.Errorf("monitorLogTransferOut: cannot parse event, err:%v", err)
+			log.Errorf("monitorLogTransferOut: cannot parse event, chainId:%d, txHash:%x, err:%v", bc.chainId.Uint64(), eLog.TxHash, err)
 			return false
 		}
 		if ev.Receiver != s.accountAddr {
 			log.Infof("this transfer out receiver is not current relay node and skip it")
 			return false
 		}
+		log.Infof("get monitorLogTransferOut, chain id:%d, block number:%d, transfer id:%x, eLog txHash:%x", bc.chainId.Uint64(), eLog.BlockNumber, ev.TransferId, eLog.TxHash)
 
 		_, found := s.chainMap[ev.DstChainId]
 		if found {
@@ -432,13 +432,11 @@ func (s *server) monitorLogTransferIn(bc *bridgeConfig) (monitor.CallbackID, err
 		Contract:   bc.contractChain,
 		StartBlock: bc.mon.GetCurrentBlockNumber(),
 	}
-	log.Infof("transferIn monitor config: %+v", cfg)
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
-		log.Infof("get monitorLogTransferIn, block number:%d", eLog.BlockNumber)
 		ev := &contracts.CBridgeLogNewTransferIn{}
 		err := bc.contractChain.ParseEvent(evLogTransferIn, eLog, ev)
 		if err != nil {
-			log.Errorf("monitorLogTransferIn: cannot parse event, err:%v", err)
+			log.Errorf("monitorLogTransferIn: cannot parse event, chainId:%d, txHash:%x, err:%v", bc.chainId.Uint64(), eLog.TxHash, err)
 			return false
 		}
 
@@ -446,7 +444,7 @@ func (s *server) monitorLogTransferIn(bc *bridgeConfig) (monitor.CallbackID, err
 			log.Infof("this transfer in sender is not current relay node")
 			return false
 		}
-
+		log.Infof("get monitorLogTransferIn, chain id:%d, block number:%d, transfer id:%x, eLog txHash:%x", bc.chainId.Uint64(), eLog.BlockNumber, ev.TransferId, eLog.TxHash)
 		dbErr := s.db.RecordTransferIn(ev.TransferId, eLog.TxHash)
 		if dbErr != nil {
 			log.Errorf("fail to send this transfer in to locked, transferId:%x, err:%v", ev.TransferId, dbErr)
@@ -465,14 +463,13 @@ func (s *server) monitorLogConfirm(bc *bridgeConfig) (monitor.CallbackID, error)
 		StartBlock: bc.mon.GetCurrentBlockNumber(),
 	}
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
-		log.Infof("get monitorLogConfirm, block number:%d", eLog.BlockNumber)
 		ev := &contracts.CBridgeLogTransferConfirmed{}
 		err := bc.contractChain.ParseEvent(evLogTransferConfirmed, eLog, ev)
 		if err != nil {
-			log.Errorf("monitorLogConfirm: cannot parse event:%v", err)
+			log.Errorf("monitorLogTransferConfirm: cannot parse event, chainId:%d, txHash:%x, err:%v", bc.chainId.Uint64(), eLog.TxHash, err)
 			return false
 		}
-
+		log.Infof("get monitorLogConfirm, chain id:%d, block number:%d, transfer id:%x, eLog txHash:%x", bc.chainId.Uint64(), eLog.BlockNumber, ev.TransferId, eLog.TxHash)
 		dbErr := s.db.ConfirmTransfer(ev.TransferId, ev.Preimage, eLog.TxHash)
 		if dbErr != nil {
 			log.Errorf("fail to update transfer status to confirmed, ev:%v, err:%v", ev, dbErr)
@@ -497,14 +494,13 @@ func (s *server) monitorLogRefund(bc *bridgeConfig) (monitor.CallbackID, error) 
 		StartBlock: bc.mon.GetCurrentBlockNumber(),
 	}
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
-		log.Infof("get monitorLogRefund, block number:%d", eLog.BlockNumber)
 		ev := &contracts.CBridgeLogTransferRefunded{}
 		err := bc.contractChain.ParseEvent(evLogTransferRefunded, eLog, ev)
 		if err != nil {
-			log.Errorf("monitorLogRefund: cannot parse event, txHash:%x, err:%v", eLog.TxHash, err)
+			log.Errorf("monitorLogTransferRefund: cannot parse event, chainId:%d, txHash:%x, err:%v", bc.chainId.Uint64(), eLog.TxHash, err)
 			return false
 		}
-
+		log.Infof("get monitorLogRefund, chain id:%d, block number:%d, transfer id:%x, eLog txHash:%x", bc.chainId.Uint64(), eLog.BlockNumber, ev.TransferId, eLog.TxHash)
 		dbErr := s.db.RefundTransfer(ev.TransferId, eLog.TxHash)
 		if dbErr != nil {
 			log.Errorf("this transfer is refunded by fail to update the status in db, tx:%v, err:%v", ev, dbErr)

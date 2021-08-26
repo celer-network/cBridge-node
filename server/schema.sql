@@ -40,3 +40,4 @@ CREATE TABLE IF NOT EXISTS transfer (
 CREATE INDEX IF NOT EXISTS transfer_create_ts_idx ON transfer (createts);
 CREATE INDEX IF NOT EXISTS transfer_chain_id_idx ON transfer (chainid);
 CREATE INDEX IF NOT EXISTS transfer_status_idx ON transfer (status);
+CREATE INDEX IF NOT EXISTS transfer_related_tid_idx ON transfer (relatedtid);

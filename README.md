@@ -28,7 +28,7 @@ Note that `26257` is the RPC port. You can change it to any port you prefer but 
 cockroach sql --insecure --host=127.0.0.1 --port=26257 --database=cbridge < ./server/schema.sql
 ```
 
-## Get cBridge Node Binanry
+## Get cBridge Node Binary
 
 We provide cBridge node binary for MacOS, Linux AMD64, Linux ARM64
 You can get these binary files in release page of this github repo.

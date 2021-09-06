@@ -190,7 +190,7 @@ func ReadPassword(ksBytes []byte, pwdDir string) (string, error) {
 		if err2 != nil {
 			return "", err2
 		}
-		return string(pwdBytes), nil
+		return strings.Trim(string(pwdBytes), "\n"), nil
 	}
 
 	ksPasswordStr := ""

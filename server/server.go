@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"net/http"
@@ -13,8 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/julienschmidt/httprouter"
 
 	cbn "github.com/celer-network/cBridge-go/cbridgenode"
 	"github.com/celer-network/cBridge-go/contracts"
@@ -28,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/julienschmidt/httprouter"
 	solsha3 "github.com/miguelmota/go-solidity-sha3"
 )
 
@@ -119,7 +117,7 @@ func (s *server) InitGatewayClient(gatewayUrl string) error {
 	return nil
 }
 
-func (s *server) Init(config *cbn.CBridgeConfig) error {
+func (s *server) Init(config *cbn.CBridgeConfig, ks, pwdDir string) error {
 	s.cfg = config
 	var err error
 
@@ -132,18 +130,16 @@ func (s *server) Init(config *cbn.CBridgeConfig) error {
 	log.Infoln("Successfully initialize DB")
 
 	log.Infoln("Loading keystore...")
-	ksjson, err := ioutil.ReadFile(config.GetKsPath())
+	tcfg, err := GetTransactorConfig(ks, pwdDir)
 	if err != nil {
-		log.Fatalln("read keystore json err:", err)
 		return err
 	}
-	tcfg := eth.NewTransactorConfig(string(ksjson), config.GetKsPwd())
-	s.accountAddr, _, err = eth.GetAddrPrivKeyFromKeystore(string(ksjson), config.GetKsPwd())
+	s.accountAddr, _, err = eth.GetAddrPrivKeyFromKeystore(tcfg.Keyjson, tcfg.Passphrase)
 	if err != nil {
 		log.Errorf("fail to get relay node wallet from key store, err:%v", err)
 		return err
 	}
-	s.signer, err = eth.NewSignerFromKeystore(string(ksjson), config.GetKsPwd(), big.NewInt(0))
+	s.signer, err = eth.NewSignerFromKeystore(tcfg.Keyjson, tcfg.Passphrase, big.NewInt(0))
 	if err != nil {
 		log.Errorf("fail to create relay node singer from key store, err:%v", err)
 		return err
@@ -214,11 +210,11 @@ func (s *server) Init(config *cbn.CBridgeConfig) error {
 				return err
 			}
 
-			ksfAc, err := os.Open(config.GetKsPath())
+			ksfAc, err := os.Open(ks)
 			if err != nil {
 				return err
 			}
-			authAccount, err := bind.NewTransactorWithChainID(ksfAc, config.GetKsPwd(), bgc.chainId)
+			authAccount, err := bind.NewTransactorWithChainID(ksfAc, tcfg.Passphrase, bgc.chainId)
 			if err != nil {
 				return err
 			}
@@ -230,11 +226,23 @@ func (s *server) Init(config *cbn.CBridgeConfig) error {
 
 			if curAllowance.Cmp(new(big.Int).Div(MaxUint256, big.NewInt(2))) < 0 {
 				log.Infof("Approving token %s on chain %d...", tokenConfig.GetTokenName(), chainConfig.GetChainId())
-				_, err = bgc.erc20Map[Hex2Addr(tokenConfig.GetTokenAddress())].Approve(authAccount, bgc.contractChain.GetAddr(), MaxUint256)
-				if err != nil {
-					log.Errorf("can not approve token %s on chain %d", tokenConfig.GetTokenName(), chainConfig.GetChainId())
-					return err
+				approveTx, approveErr := bgc.erc20Map[Hex2Addr(tokenConfig.GetTokenAddress())].Approve(authAccount, bgc.contractChain.GetAddr(), MaxUint256)
+				if approveErr != nil {
+					log.Errorf("please try again, can not approve token %s on chain %d, err:%v", tokenConfig.GetTokenName(), chainConfig.GetChainId(), approveErr)
+					return approveErr
 				}
+
+				approveReceipt, approveReceiptErr := eth.WaitMinedWithTxHash(context.Background(),
+					bgc.ec,
+					approveTx.Hash().String(),
+					eth.WithTimeout(1*time.Minute),
+					eth.WithBlockDelay(3))
+				if approveReceiptErr != nil {
+					log.Errorf("please try again, can not approve token %s on chain %d, err:%v", tokenConfig.GetTokenName(), chainConfig.GetChainId(), approveReceiptErr)
+					return approveReceiptErr
+				}
+				log.Infof("success to approve token:%s on chain:%d, receiptTxHash:%x, blockNum:%s, gasUsed:%d",
+					tokenConfig.GetTokenName(), chainConfig.GetChainId(), approveReceipt.TxHash, approveReceipt.BlockNumber.String(), approveReceipt.GasUsed)
 			}
 		}
 

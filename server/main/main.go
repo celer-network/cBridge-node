@@ -15,6 +15,8 @@ var (
 	port    = flag.Int("p", 8088, "web port used for get relay node stats")
 	config  = flag.String("c", "", "config json file path")
 	showver = flag.Bool("v", false, "Show version and exit")
+	ks      = flag.String("ks", "", "path to keystore json file")
+	pwdDir  = flag.String("pwddir", "", "path to the directory containing passwords")
 )
 
 func main() {
@@ -22,6 +24,7 @@ func main() {
 	if version == "" {
 		version = "v1.0.2"
 	}
+	checkFlags()
 	if *showver {
 		printver()
 		os.Exit(0)
@@ -44,7 +47,7 @@ func main() {
 	}
 	log.Infof("Successfully connected to gateway server")
 
-	err = s.Init(cbConfig)
+	err = s.Init(cbConfig, *ks, *pwdDir)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -78,4 +81,16 @@ var (
 func printver() {
 	fmt.Println("Version:", version)
 	fmt.Println("Commit:", commit)
+}
+
+func checkFlags() {
+	if *config == "" {
+		log.Fatalln("-c config not specified")
+	}
+	if *ks == "" {
+		log.Fatalln("-ks keystore not specified")
+	}
+	if *pwdDir == "" {
+		log.Fatalln("-pwddir password file not specified")
+	}
 }

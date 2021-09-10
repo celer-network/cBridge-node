@@ -152,8 +152,6 @@ If you have checked all of the above items, let's proceed to the relay node conf
       }
     }
   ],
-  "ksPath": "", // relay node keystore json file path
-  "ksPwd": "", // keystore password (never commit it to public repo)
   "db": "127.0.0.1:26257", // CockroachDB RPC url
   "gateway": "cbridge-api.celer.network:8081" //cBridge gateway server url
 }
@@ -168,13 +166,17 @@ If you have checked all of the above items, let's proceed to the relay node conf
 | Arbitrum | 42161 | 10 | 8 |
 | Polygon | 137 | 15 | 80 |
 | xDai | 100 | 15 | 15 |
+| OKExChain | 66 | 15 | 30 |
+| Avalanche (C-Chain) | 43114 | 15 | 15 |
+| Optimism | 10 | 10 | 8 |
+| Fantom | 250 | 10 | 6 |
 
 ## Start Your Relay Node
 
 Suppose that the config file is saved to `./env/config.json`. Then you can start the relay node by executing the binary:
 
 ```sh
-./cbridge-node -p 8088 -c ./env/config.json
+./cbridge-node -p 8088 -c ./env/config.json -ks ./env/ks/yourKeyStore.json -pwddir ./env/ks/yourPasswordFile
 ```
 
 where `-c` specifies the path to the node config file and `-p` specifies the http port that you can use to query tx and stats about your relay node (to be introduced later).

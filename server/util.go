@@ -1,18 +1,25 @@
 package server
 
 import (
+	"bufio"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
 	"strings"
+	"syscall"
 
 	cbn "github.com/celer-network/cBridge-go/cbridgenode"
+	"github.com/celer-network/goutils/eth"
+	"github.com/celer-network/goutils/log"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	eco "github.com/ethereum/go-ethereum/common"
 	ethmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -34,7 +41,7 @@ func ParseCfgFile(f string) (*cbn.CBridgeConfig, error) {
 		return nil, err
 	}
 	ret := new(cbn.CBridgeConfig)
-	err = protojson.Unmarshal(raw, ret)
+	err = protojson.UnmarshalOptions{DiscardUnknown: true}.Unmarshal(raw, ret)
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +163,67 @@ func Bytes2Hash(b []byte) Hash {
 	return eco.BytesToHash(b)
 }
 
-func ChkErr(e error, msg string) {
-	if e != nil {
-		fmt.Println("Err:", msg, e)
-		os.Exit(1)
+func GetTransactorConfig(ks, pwdDir string) (*eth.TransactorConfig, error) {
+	ksjson, err := ioutil.ReadFile(ks)
+	if err != nil {
+		log.Fatalln("read ks json err:", err)
+		return nil, err
 	}
+	ksPasswordStr, err := ReadPassword(ksjson, pwdDir)
+	if err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+
+	return eth.NewTransactorConfig(string(ksjson), ksPasswordStr), nil
+}
+
+// Read a password from terminal or from a directory containing password files.
+func ReadPassword(ksBytes []byte, pwdDir string) (string, error) {
+	ksAddress, err := GetAddressFromKeystore(ksBytes)
+	if err != nil {
+		return "", err
+	}
+
+	if pwdDir != "" {
+		pwdBytes, err2 := ioutil.ReadFile(pwdDir)
+		if err2 != nil {
+			return "", err2
+		}
+		return strings.Trim(string(pwdBytes), "\n"), nil
+	}
+
+	ksPasswordStr := ""
+	if terminal.IsTerminal(syscall.Stdin) {
+		fmt.Printf("Enter password for %s: ", ksAddress)
+		ksPassword, err2 := terminal.ReadPassword(syscall.Stdin)
+		if err2 != nil {
+			return "", fmt.Errorf("Cannot read password from terminal: %w", err2)
+		}
+		ksPasswordStr = string(ksPassword)
+	} else {
+		reader := bufio.NewReader(os.Stdin)
+		ksPwd, err2 := reader.ReadString('\n')
+		if err2 != nil {
+			return "", fmt.Errorf("Cannot read password from stdin: %w", err2)
+		}
+		ksPasswordStr = strings.TrimSuffix(ksPwd, "\n")
+	}
+
+	_, err = keystore.DecryptKey(ksBytes, ksPasswordStr)
+	if err != nil {
+		return "", err
+	}
+	return ksPasswordStr, nil
+}
+
+func GetAddressFromKeystore(ksBytes []byte) (string, error) {
+	type ksStruct struct {
+		Address string
+	}
+	var ks ksStruct
+	if err := json.Unmarshal(ksBytes, &ks); err != nil {
+		return "", err
+	}
+	return ks.Address, nil
 }

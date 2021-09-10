@@ -85,8 +85,6 @@
       }
     }
   ],
-  "ksPath": "",
-  "ksPwd": "",
   "db": "127.0.0.1:26257",
   "gateway": "cbridge-api.celer.network:8081"
 }

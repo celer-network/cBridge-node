@@ -47,10 +47,6 @@ const (
 	transactorWaitTimeout = 5 * time.Minute
 )
 
-var (
-	InvalidGasPriceChain = errors.New("no valid gas price in token chain")
-)
-
 type server struct {
 	version      string
 	cfg          *cbn.CBridgeConfig // config from local json file

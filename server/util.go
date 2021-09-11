@@ -19,6 +19,7 @@ import (
 	eco "github.com/ethereum/go-ethereum/common"
 	ethmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/hashicorp/vault/api"
 	"golang.org/x/crypto/ssh/terminal"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -163,13 +164,13 @@ func Bytes2Hash(b []byte) Hash {
 	return eco.BytesToHash(b)
 }
 
-func GetTransactorConfig(ks, pwdDir string) (*eth.TransactorConfig, error) {
+func GetTransactorConfig(ks, pwdDir string, secretPath string, vaultAddr string, vaultToken string) (*eth.TransactorConfig, error) {
 	ksjson, err := ioutil.ReadFile(ks)
 	if err != nil {
 		log.Fatalln("read ks json err:", err)
 		return nil, err
 	}
-	ksPasswordStr, err := ReadPassword(ksjson, pwdDir)
+	ksPasswordStr, err := ReadPassword(ksjson, pwdDir, secretPath, vaultAddr, vaultToken)
 	if err != nil {
 		log.Fatal(err)
 		return nil, err
@@ -179,10 +180,18 @@ func GetTransactorConfig(ks, pwdDir string) (*eth.TransactorConfig, error) {
 }
 
 // Read a password from terminal or from a directory containing password files.
-func ReadPassword(ksBytes []byte, pwdDir string) (string, error) {
+func ReadPassword(ksBytes []byte, pwdDir string, secretPath string, vaultAddr string, vaultToken string) (string, error) {
 	ksAddress, err := GetAddressFromKeystore(ksBytes)
 	if err != nil {
 		return "", err
+	}
+
+	if secretPath != "" {
+		pwdBytes, err2 := GetSecretFromVault(secretPath, vaultAddr, vaultToken) //ioutil.ReadFile(pwdDir)
+		if err2 != nil {
+			return "", err2
+		}
+		return strings.Trim(string(pwdBytes), "\n"), nil
 	}
 
 	if pwdDir != "" {
@@ -226,4 +235,31 @@ func GetAddressFromKeystore(ksBytes []byte) (string, error) {
 		return "", err
 	}
 	return ks.Address, nil
+}
+
+func GetSecretFromVault(secretPath string, vaultAddr string, vaultToken string) (string, error) {
+	config := &api.Config{
+		Address: vaultAddr,
+	}
+	client, err := api.NewClient(config)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+	client.SetToken(vaultToken)
+	secret, err := client.Logical().Read(secretPath)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+	m, ok := secret.Data["data"].(map[string]interface{})
+	if !ok {
+		fmt.Printf("%T %#v\n", secret.Data["data"], secret.Data["data"])
+		return "", err
+	}
+
+	str := fmt.Sprint(m["data"])
+	log.Infof("Successfully loaded the secret for the path: %v\n", secretPath)
+
+	return str, nil
 }

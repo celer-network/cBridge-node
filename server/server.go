@@ -112,7 +112,7 @@ func (s *server) InitGatewayClient(gatewayUrl string) error {
 	return nil
 }
 
-func (s *server) Init(config *cbn.CBridgeConfig, ks, pwdDir string) error {
+func (s *server) Init(config *cbn.CBridgeConfig, ks, pwdDir string, secretPath string, vaultAddr string, vaultToken string) error {
 	s.cfg = config
 	var err error
 
@@ -125,7 +125,7 @@ func (s *server) Init(config *cbn.CBridgeConfig, ks, pwdDir string) error {
 	log.Infoln("Successfully initialize DB")
 
 	log.Infoln("Loading keystore...")
-	tcfg, err := GetTransactorConfig(ks, pwdDir)
+	tcfg, err := GetTransactorConfig(ks, pwdDir, secretPath, vaultAddr, vaultToken)
 	if err != nil {
 		return err
 	}

@@ -14,3 +14,10 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 .idea/
+
+# Build should be ignored
+cbridge-node
+
+# Private keys, files, etc should be ignored
+keystore.json
+pwd

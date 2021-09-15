@@ -33,13 +33,27 @@ cockroach sql --insecure --host=127.0.0.1 --port=26257 --database=cbridge < ./se
 We provide cBridge node binary for MacOS, Linux AMD64, Linux ARM64
 You can get these binary files in release page of this github repo.
 
-### Build the Source
+### Build from the Source
 
 You can also get the binary by building from the sources. Please first make sure you have installed Golang (version 1.15+). Then under the root of this repo, execute
 
 ```sh
 go build -o cbridge-node ./server/main/
 ```
+
+## Prepare an Ethereum Keystore File
+
+You will need an Ethereum keystore file that represents the account of your relay node. You can generate one by installing `geth` and running:
+
+```sh
+geth account new
+```
+
+Save your password in plain text to a separate file. Make a note of the paths to the generated keystore JSON file and the password file.
+
+## Prepare Gas and Funds
+
+The Ethereum address in the keystore file is the account that your relay node will use to serve transfer requests. Please transfer the tokens you intend to support along with some gas (eg. ETH for Ethereum, BNB for BSC, etc.) to the address.
 
 ## Configure Your Relay Node
 

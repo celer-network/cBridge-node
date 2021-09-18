@@ -71,8 +71,8 @@ github.com/btcsuite/snappy-go v0.0.0-20151229074030-0bdef8d06723/go.mod h1:8woku
 github.com/btcsuite/websocket v0.0.0-20150119174127-31079b680792/go.mod h1:ghJtEyQwv5/p4Mg4C0fgbePVuGr935/5ddU9Z3TmDRY=
 github.com/btcsuite/winsvc v1.0.0/go.mod h1:jsenWakMcC0zFBFurPLEAyrnc/teJEM1O46fmI40EZs=
 github.com/c-bata/go-prompt v0.2.2/go.mod h1:VzqtzE2ksDBcdln8G7mk2RX9QyGjH+OVqOCSiVIqS34=
-github.com/celer-network/goutils v0.1.33 h1:Pvs8+bFbGM977XnyMkd7pgoYQJFHyXr3Af8R6E0Ca9o=
-github.com/celer-network/goutils v0.1.33/go.mod h1:xRwOcBR5/awhHHbKhPM13DKLOYcEX2t2p7FIxx4x5ng=
+github.com/celer-network/goutils v0.1.34 h1:1iRZ4pvGxRgB1gFLDR6SRjAPYj2q8pqUPDNjFqGN9o4=
+github.com/celer-network/goutils v0.1.34/go.mod h1:xRwOcBR5/awhHHbKhPM13DKLOYcEX2t2p7FIxx4x5ng=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/cp v0.1.0/go.mod h1:SOGHArjBr4JWaSDEVpWpo/hNg6RoKrls6Oh40hiwW+s=
 github.com/cespare/cp v1.1.1 h1:nCb6ZLdB7NRaqsm91JtQTAme2SKJzXVsdPIPkyJr1MU=

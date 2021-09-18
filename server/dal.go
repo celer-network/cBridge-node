@@ -16,7 +16,7 @@ const (
 	transferAllColumnParams        = "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23"
 	timeLockSafeMargin             = 6 * time.Minute
 	refundSafeMargin               = 3 * time.Minute
-	maxPendingTimeOutRetryDuration = 30 * time.Minute
+	maxPendingTimeOutRetryDuration = 15 * time.Minute
 )
 
 type DAL struct {
@@ -245,6 +245,7 @@ func (d *DAL) GetAllStartTransferIn() ([]*Transfer, error) {
 }
 
 func (d *DAL) GetAllConfirmableLockedTransfer() ([]*Transfer, error) {
+	//TODO time lock may be is not needed
 	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and timelock > $2 and preimage is not null and preimage != '' and preimage != $3", transferAllColumns)
 	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, time.Now().Add(timeLockSafeMargin), Hash{}.String())
 	if err != nil {

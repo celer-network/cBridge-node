@@ -68,122 +68,140 @@ If you have checked all of the above items, let's proceed to the relay node conf
 
 ```javascript
 {
-  "chainConfig": [
-    // Specify the list of chains + tokens the relay node support
-    // Your node will only relay transfers where both the source and the destination chain
-    // are within the below chain list.
-    // For example, if the list contains Ethereum Mainnet (chainId=1), BSC (chainId=56)
-    // and Arbitrum (chainId=42161), the node can relay (1) Ethereum Mainnet --> BSC
-    // (2) BSC --> Ethereum Mainnet (3) Arbitrum --> Ethereum Mainnet
-    // (4) Ethereum Mainnet --> Arbitrum (5) Arbitrum --> BSC (6) BSC --> Arbitrum
-    {
-      "chainId": 1, //Ethereum Mainnet
-      "endpoint": "", // specify your chain RPC url (e.g., an Infura endpoint)
-      "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C", // cBridge contract address
-      "feeRate": 5, // fee percent the node charge for transfers destined to this chain (in unit of 0.01%, 5 means 0.05%)
-      "tokenConfig": [
-        // Specify the list of tokens the relay node supports on the chain
-        // NOTE: if you specify a token on the chain, the minimum balance requirement should be met
-        // otherwise the relay node may fail to operate
-        // Refer to https://cbridge-stat.s3.us-west-2.amazonaws.com/mainnet/chains-tokens.json 
-        // about the minimum balance requirement for each chain and token
+    "chainConfig": [
+        // Specify the list of chains + tokens the relay node support
+        // Your node will only relay transfers where both the source and the destination chain
+        // are within the below chain list.
+        // For example, if the list contains Ethereum Mainnet (chainId=1), BSC (chainId=56)
+        // and Arbitrum (chainId=42161), the node can relay (1) Ethereum Mainnet --> BSC
+        // (2) BSC --> Ethereum Mainnet (3) Arbitrum --> Ethereum Mainnet
+        // (4) Ethereum Mainnet --> Arbitrum (5) Arbitrum --> BSC (6) BSC --> Arbitrum
         {
-          "tokenName": "USDT",
-          "tokenAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
-          "tokenDecimal": 6
+            "chainId": 1, //Ethereum Mainnet
+            "endpoint": "", // specify your chain RPC url (e.g., an Infura endpoint)
+            "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C", // cBridge contract address
+            "feeRate": 5, // fee percent the node charge for transfers destined to this chain (in unit of 0.01%, 5 means 0.05%)
+            "tokenConfig": [
+                // Specify the list of tokens the relay node supports on the chain
+                // NOTE: if you specify a token on the chain, the minimum balance requirement should be met
+                // otherwise the relay node may fail to operate
+                // Refer to https://cbridge-stat.s3.us-west-2.amazonaws.com/mainnet/chains-tokens.json 
+                // about the minimum balance requirement for each chain and token
+                {
+                    "tokenName": "USDT",
+                    "tokenAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                    "tokenDecimal": 6
+                },
+                {
+                    "tokenName": "DAI",
+                    "tokenAddress": "0x6b175474e89094c44da98b954eedeac495271d0f",
+                    "tokenDecimal": 18
+                },
+                {
+                    "tokenName": "USDC",
+                    "tokenAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                    "tokenDecimal": 6
+                },
+                {
+                    "tokenName": "BUSD",
+                    "tokenAddress": "0x4fabb145d64652a948d72533023f6e7a623c7c53",
+                    "tokenDecimal": 18
+                }
+            ],
+            "watchConfig": {
+                "pollingInterval": 10, // interval (in seconds) to periodically query eth logs
+                "blockDelay": 4, // the block confirmation delay (in blocks)
+                "maxBlockDelta": 5000 // maximum number of blocks for each eth log query
+            },
+            "transactorConfig": {
+                "gasLimit": 50000,
+                "addGasGwei": 10,
+                "addGasEstimateRatio": 0.3
+            }
         },
         {
-          "tokenName": "DAI",
-          "tokenAddress": "0x6b175474e89094c44da98b954eedeac495271d0f",
-          "tokenDecimal": 18
+            "chainId": 56, // Binance Smart Chain
+            "endpoint": "",
+            "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C",
+            "feeRate": 0,
+            "tokenConfig": [
+                {
+                    "tokenName": "USDT",
+                    "tokenAddress": "0x55d398326f99059ff775485246999027b3197955",
+                    "tokenDecimal": 18
+                },
+                {
+                    "tokenName": "DAI",
+                    "tokenAddress": "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3",
+                    "tokenDecimal": 18
+                },
+                {
+                    "tokenName": "USDC",
+                    "tokenAddress": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+                    "tokenDecimal": 18
+                },
+                {
+                    "tokenName": "BUSD",
+                    "tokenAddress": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+                    "tokenDecimal": 18
+                }
+            ],
+            "watchConfig": {
+                "pollingInterval": 3,
+                "blockDelay": 4,
+                "maxBlockDelta": 5000
+            },
+            "transactorConfig": {
+                "addGasGwei": 2,
+                "addGasEstimateRatio": 0.3
+            }
         },
         {
-          "tokenName": "USDC",
-          "tokenAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-          "tokenDecimal": 6
-        },
-        {
-          "tokenName": "BUSD",
-          "tokenAddress": "0x4fabb145d64652a948d72533023f6e7a623c7c53",
-          "tokenDecimal": 18
+            "chainId": 42161, // Arbitrum
+            "endpoint": "",
+            "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C",
+            "feeRate": 0,
+            "tokenConfig": [
+                {
+                    "tokenName": "USDC",
+                    "tokenAddress": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+                    "tokenDecimal": 6
+                }
+            ],
+            "watchConfig": {
+                "pollingInterval": 3,
+                "blockDelay": 4,
+                "maxBlockDelta": 5000
+            },
+            "transactorConfig": {
+                "gasLimit": 50000,
+                "addGasGwei": 2,
+                "addGasEstimateRatio": 0.3
+            }
         }
-      ],
-      "watchConfig": {
-        "pollingInterval": 10, // interval (in seconds) to periodically query eth logs
-        "blockDelay": 4, // the block confirmation delay (in blocks)
-        "maxBlockDelta": 5000 // maximum number of blocks for each eth log query
-      }
-    },
-    {
-      "chainId": 56, // Binance Smart Chain
-      "endpoint": "",
-      "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C",
-      "feeRate": 0,
-      "tokenConfig": [
-        {
-          "tokenName": "USDT",
-          "tokenAddress": "0x55d398326f99059ff775485246999027b3197955",
-          "tokenDecimal": 18
-        },
-        {
-          "tokenName": "DAI",
-          "tokenAddress": "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3",
-          "tokenDecimal": 18
-        },
-        {
-          "tokenName": "USDC",
-          "tokenAddress": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
-          "tokenDecimal": 18
-        },
-        {
-          "tokenName": "BUSD",
-          "tokenAddress": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
-          "tokenDecimal": 18
-        }
-      ],
-      "watchConfig": {
-        "pollingInterval": 3,
-        "blockDelay": 4,
-        "maxBlockDelta": 5000
-      }
-    },
-    {
-      "chainId": 42161, // Arbitrum
-      "endpoint": "",
-      "contractAddress": "0x841ce48F9446C8E281D3F1444cB859b4A6D0738C",
-      "feeRate": 0,
-      "tokenConfig": [
-        {
-          "tokenName": "USDC",
-          "tokenAddress": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
-          "tokenDecimal": 6
-        }
-      ],
-      "watchConfig": {
-        "pollingInterval": 3,
-        "blockDelay": 4,
-        "maxBlockDelta": 5000
-      }
-    }
-  ],
-  "db": "127.0.0.1:26257", // CockroachDB RPC url
-  "gateway": "cbridge-api.celer.network:8081" //cBridge gateway server url
+    ], 
+    "db": "127.0.0.1:26257", // CockroachDB RPC url
+    "gateway": "cbridge-api.celer.network:8081" //cBridge gateway server url
 }
 ```
 
 ### Recommended BlockDelay and PollingInterval
+| ChainName | ChainId | PollingInterval | BlockDelay | MaxBlockDelta | ForwardBlockDelay | GasLimit | AddGasGwei | AddGasEstimateRatio |
+| --- | --- | --- | --- | --- | --- |  --- |  --- |  --- |
+| Ethereum mainnet | 1 | 15 | 8 | 0 | 0 | 0 | 10 | 0.3 |
+| BSC | 56 | 10 | 8 | 5000 | 0 | 0 | 2 | 0.3 |
+| Arbitrum | 42161 | 10 | 8 | 0 | 500 | 3200000 | 2 | 0 |
+| Polygon | 137 | 15 | 80 | 1000 | 0 | 0 | 50 | 0.3 |
+| xDai | 100 | 15 | 15 | 0 | 0 | 0 | 2 | 0.3 |
+| OKExChain | 66 | 15 | 30 | 2000 | 0 | 0 | 2 | 0.3 |
+| Avalanche (C-Chain) | 43114 | 15 | 15 | 0 | 0 | 0 | 2 | 0.3 |
+| Optimism | 10 | 10 | 8 | 10000 | 0 | 50000000 | 2 | 0 |
+| Fantom | 250 | 10 | 15 | 0 | 0 | 0 | 2 | 0.3 |
+| huobichain | 128 | 15 | 15 | 5000 | 0 | 0 | 2 | 0.3 |
 
-| ChainName | ChainId | PollingInterval | BlockDelay |
-| --- | --- | --- | --- |
-| Ethereum mainnet | 1 | 15 | 8 |
-| BSC | 56 | 10 | 8 |
-| Arbitrum | 42161 | 10 | 8 |
-| Polygon | 137 | 15 | 80 |
-| xDai | 100 | 15 | 15 |
-| OKExChain | 66 | 15 | 30 |
-| Avalanche (C-Chain) | 43114 | 15 | 15 |
-| Optimism | 10 | 10 | 8 |
-| Fantom | 250 | 10 | 6 |
+#####Note: 
+######(1) For Arbitrum, BlockDelay:8 and ForwardBlockDelay: 500 is Recommended, this will help relay node do not skip any Arbitrum Event, otherwise your transfer may finished with refunded at the end.
+######(2) AddGasGwei will help your onchain-tx process faster, and the gas cost may be higher. You can decide this config value. For example, we recommend you use "add 10 gwei", otherwise eth may not accept your tx at once, it may task more than hours to accept your tx which may cause the transfer cancelled. 
 
 ## Start Your Relay Node
 
@@ -194,6 +212,7 @@ Suppose that the config file is saved to `./env/config.json`. Then you can start
 ```
 
 where `-c` specifies the path to the node config file and `-p` specifies the http port that you can use to query tx and stats about your relay node (to be introduced later).
+where `-ks` specifies the path of the keystore file and `-pwddir` specifies the path of the file where saves your keystore password.
 
 After a while, you should see your relay node is up running.
 
@@ -331,3 +350,4 @@ No, the relay node funds are fully secured with the underlying Hashed Time Lock 
 ### What is the behavior after the relay node recovers from a failure?
 
 If the relay node dies, it won't accept new transfer requests from users. In the case where there are in-progress transfers when the relay node dies, it will automatically pick up these transfers after it restarts.
+

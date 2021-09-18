@@ -160,7 +160,7 @@ func (s *server) Init(config *cbn.CBridgeConfig, ks, pwdDir string) error {
 			tcfg.Passphrase,
 			bgc.ec,
 			bgc.chainId,
-			s.waitMinedOptions(bgc)...,
+			s.transactorOptions(bgc)...,
 		)
 		if err != nil {
 			return err
@@ -230,8 +230,9 @@ func (s *server) Init(config *cbn.CBridgeConfig, ks, pwdDir string) error {
 				approveReceipt, approveReceiptErr := eth.WaitMinedWithTxHash(context.Background(),
 					bgc.ec,
 					approveTx.Hash().String(),
-					eth.WithTimeout(1*time.Minute),
-					eth.WithBlockDelay(3))
+					eth.WithTimeout(2*time.Minute),
+					eth.WithBlockDelay(2))
+
 				if approveReceiptErr != nil {
 					log.Errorf("please try again, can not approve token %s on chain %d, err:%v", tokenConfig.GetTokenName(), chainConfig.GetChainId(), approveReceiptErr)
 					return approveReceiptErr
@@ -259,11 +260,7 @@ func (s *server) Init(config *cbn.CBridgeConfig, ks, pwdDir string) error {
 
 	// init monitoring
 	for _, bgc := range s.chainMap {
-		maxBlockDelta := uint64(5000)
-		if bgc.config.WatchConfig.GetMaxBlockDelta() > 0 {
-			maxBlockDelta = bgc.config.WatchConfig.GetMaxBlockDelta()
-		}
-		bgc.watch = watcher.NewWatchService(bgc.ec, s.db, bgc.config.WatchConfig.GetPollingInterval(), maxBlockDelta)
+		bgc.watch = watcher.NewWatchService(bgc.ec, s.db, bgc.config.WatchConfig.GetPollingInterval(), bgc.config.WatchConfig.GetMaxBlockDelta())
 		if bgc.watch == nil {
 			fmt.Println("Cannot setup watch service")
 			return fmt.Errorf("NewWatchService failed: %w", err)
@@ -300,10 +297,11 @@ func (s *server) Init(config *cbn.CBridgeConfig, ks, pwdDir string) error {
 
 func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, error) {
 	cfg := &monitor.Config{
-		ChainId:    bc.chainId.Uint64(),
-		EventName:  evLogTransferOut,
-		Contract:   bc.contractChain,
-		StartBlock: bc.mon.GetCurrentBlockNumber(),
+		ChainId:      bc.chainId.Uint64(),
+		EventName:    evLogTransferOut,
+		Contract:     bc.contractChain,
+		StartBlock:   bc.mon.GetCurrentBlockNumber(),
+		ForwardDelay: bc.config.GetWatchConfig().GetForwardBlockDelay(),
 	}
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
 		ev := &contracts.CBridgeLogNewTransferOut{}
@@ -391,9 +389,9 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 			}
 
 			// save transfer in
-			chain2TimeLock := tsNow.Add(time.Duration((int64(ev.Timelock)-tsNow.Unix())*2/3) * time.Second)
-			if chain2TimeLock.After(time.Unix(int64(ev.Timelock-60), 0)) {
-				// here a 60s safe margin to keep transferIn time lock at least diff transferOut timeout 60s.
+			chain2TimeLock := tsNow.Add(time.Duration((int64(ev.Timelock)-tsNow.Unix())*5/6) * time.Second)
+			if chain2TimeLock.After(time.Unix(int64(ev.Timelock-60*3), 0)) {
+				// here a 180s safe margin to keep transferIn time lock at least diff transferOut timeout 60s.
 				// We will record this transfer in, but this transfer in will never be processed.
 				// Because this time lock is expired.
 				log.Warnln("this transfer out is invalid, the chain2 time lock is not valid", ev, chain2TimeLock, time.Unix(int64(ev.Timelock), 0))
@@ -430,10 +428,11 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 
 func (s *server) monitorLogTransferIn(bc *bridgeConfig) (monitor.CallbackID, error) {
 	cfg := &monitor.Config{
-		ChainId:    bc.chainId.Uint64(),
-		EventName:  evLogTransferIn,
-		Contract:   bc.contractChain,
-		StartBlock: bc.mon.GetCurrentBlockNumber(),
+		ChainId:      bc.chainId.Uint64(),
+		EventName:    evLogTransferIn,
+		Contract:     bc.contractChain,
+		StartBlock:   bc.mon.GetCurrentBlockNumber(),
+		ForwardDelay: bc.config.GetWatchConfig().GetForwardBlockDelay(),
 	}
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
 		ev := &contracts.CBridgeLogNewTransferIn{}
@@ -460,10 +459,11 @@ func (s *server) monitorLogTransferIn(bc *bridgeConfig) (monitor.CallbackID, err
 
 func (s *server) monitorLogConfirm(bc *bridgeConfig) (monitor.CallbackID, error) {
 	cfg := &monitor.Config{
-		ChainId:    bc.chainId.Uint64(),
-		EventName:  evLogTransferConfirmed,
-		Contract:   bc.contractChain,
-		StartBlock: bc.mon.GetCurrentBlockNumber(),
+		ChainId:      bc.chainId.Uint64(),
+		EventName:    evLogTransferConfirmed,
+		Contract:     bc.contractChain,
+		StartBlock:   bc.mon.GetCurrentBlockNumber(),
+		ForwardDelay: bc.config.GetWatchConfig().GetForwardBlockDelay(),
 	}
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
 		ev := &contracts.CBridgeLogTransferConfirmed{}
@@ -472,7 +472,7 @@ func (s *server) monitorLogConfirm(bc *bridgeConfig) (monitor.CallbackID, error)
 			log.Errorf("monitorLogTransferConfirm: cannot parse event, chainId:%d, txHash:%x, err:%v", bc.chainId.Uint64(), eLog.TxHash, err)
 			return false
 		}
-		log.Infof("get monitorLogConfirm, chain id:%d, block number:%d, transfer id:%x, eLog txHash:%x", bc.chainId.Uint64(), eLog.BlockNumber, ev.TransferId, eLog.TxHash)
+		log.Infof("get monitorLogConfirm, chain id:%d, block number:%d, transfer id:%x, eLog txHash:%x, preimage:%x", bc.chainId.Uint64(), eLog.BlockNumber, ev.TransferId, eLog.TxHash, ev.Preimage)
 		dbErr := s.db.ConfirmTransfer(ev.TransferId, ev.Preimage, eLog.TxHash)
 		if dbErr != nil {
 			log.Errorf("fail to update transfer status to confirmed, ev:%v, err:%v", ev, dbErr)
@@ -491,10 +491,11 @@ func (s *server) monitorLogConfirm(bc *bridgeConfig) (monitor.CallbackID, error)
 // Monitor on-chain user transfer events.
 func (s *server) monitorLogRefund(bc *bridgeConfig) (monitor.CallbackID, error) {
 	cfg := &monitor.Config{
-		ChainId:    bc.chainId.Uint64(),
-		EventName:  evLogTransferRefunded,
-		Contract:   bc.contractChain,
-		StartBlock: bc.mon.GetCurrentBlockNumber(),
+		ChainId:      bc.chainId.Uint64(),
+		EventName:    evLogTransferRefunded,
+		Contract:     bc.contractChain,
+		StartBlock:   bc.mon.GetCurrentBlockNumber(),
+		ForwardDelay: bc.config.GetWatchConfig().GetForwardBlockDelay(),
 	}
 	return bc.mon.Monitor(cfg, func(id monitor.CallbackID, eLog ethtypes.Log) bool {
 		ev := &contracts.CBridgeLogTransferRefunded{}
@@ -529,7 +530,7 @@ func (s *server) Close() {
 }
 
 func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLock, transferId, srcTransferId Hash, timeLock, srcChainId uint64) error {
-	log.Infof("start transfer in, transferId:%x, chainId:%d", transferId, bc.chainId.Uint64())
+	log.Infof("start transfer in, transferId:%x, chainId:%d, srcTransferId:%x, hashLock:%x", transferId, bc.chainId.Uint64(), srcTransferId, hashLock)
 	_, err := bc.trans.Transact(
 		logTransactionStateHandler(fmt.Sprintf("receipt transferIn, transferId: %x", transferId)),
 		func(ctr bind.ContractTransactor, opts *bind.TransactOpts) (*ethtypes.Transaction, error) {
@@ -539,15 +540,12 @@ func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLoc
 			}
 			return cbt.TransferIn(opts, dstAddr, token, amount, hashLock, timeLock, srcChainId, srcTransferId)
 		},
-		eth.WithTimeout(transactorWaitTimeout),
-		eth.WithAddGasEstimateRatio(1.0),
 	)
 	return err
 }
 
-func (bc *bridgeConfig) confirm(transferId, preImage Hash) error {
-	log.Infof("start confirm, transferId:%x, chainId:%d", transferId, bc.chainId.Uint64())
-
+func (bc *bridgeConfig) confirm(transferId, srcTransferId, preImage, hashLock Hash) error {
+	log.Infof("start confirm, transferId:%x, chainId:%d, srcTransferId:%x, hashLock:%x", transferId, bc.chainId.Uint64(), srcTransferId, hashLock)
 	_, err := bc.trans.Transact(
 		logTransactionStateHandler(fmt.Sprintf("receipt confirm, transferId: %s", transferId.String())),
 		func(ctr bind.ContractTransactor, opts *bind.TransactOpts) (*ethtypes.Transaction, error) {
@@ -557,14 +555,12 @@ func (bc *bridgeConfig) confirm(transferId, preImage Hash) error {
 			}
 			return cbt.Confirm(opts, transferId, preImage)
 		},
-		eth.WithTimeout(transactorWaitTimeout),
-		eth.WithAddGasEstimateRatio(1.0),
 	)
 	return err
 }
 
-func (bc *bridgeConfig) refund(transferId Hash) error {
-	log.Infof("start refund, transferId:%x, chainId:%d", transferId, bc.chainId.Uint64())
+func (bc *bridgeConfig) refund(transferId, srcTransferId, hashLock Hash) error {
+	log.Infof("start refund, transferId:%x, chainId:%d, srcTransferId:%x, hashLock:%x", transferId, bc.chainId.Uint64(), srcTransferId, hashLock)
 	_, err := bc.trans.Transact(
 		logTransactionStateHandler(fmt.Sprintf("receipt refund, transferId: %x", transferId)),
 		func(ctr bind.ContractTransactor, opts *bind.TransactOpts) (*ethtypes.Transaction, error) {
@@ -574,8 +570,6 @@ func (bc *bridgeConfig) refund(transferId Hash) error {
 			}
 			return cbt.Refund(opts, transferId)
 		},
-		eth.WithTimeout(transactorWaitTimeout),
-		eth.WithAddGasEstimateRatio(1.0),
 	)
 	return err
 }
@@ -626,11 +620,22 @@ type TransferInfo struct {
 	Status   uint8
 }
 
-func (s *server) waitMinedOptions(bc *bridgeConfig) []eth.TxOption {
-	return []eth.TxOption{
+func (s *server) transactorOptions(bc *bridgeConfig) []eth.TxOption {
+	ops := []eth.TxOption{
+		eth.WithTimeout(transactorWaitTimeout),
 		eth.WithBlockDelay(bc.config.WatchConfig.GetBlockDelay()),
 		eth.WithPollingInterval(time.Duration(bc.config.WatchConfig.GetPollingInterval()) * time.Second),
 	}
+	if bc.config.GetTransactorConfig().GetAddGasGwei() > 0 {
+		ops = append(ops, eth.WithAddGasGwei(bc.config.GetTransactorConfig().GetAddGasGwei()))
+	}
+	if bc.config.GetTransactorConfig().GetAddGasEstimateRatio() > 0 {
+		ops = append(ops, eth.WithAddGasEstimateRatio(bc.config.GetTransactorConfig().GetAddGasEstimateRatio()))
+	}
+	if bc.config.GetTransactorConfig().GetGasLimit() > 0 {
+		ops = append(ops, eth.WithGasLimit(bc.config.GetTransactorConfig().GetGasLimit()))
+	}
+	return ops
 }
 
 func getTransferId(sender, receiver Addr, hashLock Hash, chainId uint64) Hash {
@@ -777,7 +782,16 @@ func (s *server) processTrySendTransferIn() {
 				continue
 			}
 			if remoteTransferIn.Status != 0 {
-				log.Warnf("this transfer in already exist, transfer:%v", remoteTransferIn)
+				log.Warnf("this transfer in already exist, we try to set the status to locked, transfer:%+v", remoteTransferIn)
+				if remoteTransferIn.Status == remoteTransferStatusPending {
+					// for some chain, we may miss transfer in event, then we should set it.
+					log.Warnf("find exist pending transfer, tid:%x, try to set the status", tx.TransferId)
+					tryResetPendingTransferInStatusErr := s.db.SetTransferStatusByFrom(tx.TransferId, cbn.TransferStatus_TRANSFER_STATUS_LOCKED,
+						cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_START)
+					if tryResetPendingTransferInStatusErr != nil {
+						log.Errorf("fail to set exist transferIn, tid:%x, err:%v", tx.TransferId, tryResetPendingTransferInStatusErr)
+					}
+				}
 				continue
 			}
 
@@ -815,8 +829,15 @@ func (s *server) processTrySendTransferIn() {
 
 			sendTransferInErr := bc.transferIn(tx.Receiver, tx.Token, newAmount, tx.HashLock, tx.TransferId, tx.RelatedTid, uint64(tx.TimeLock.Unix()), bc.chainId.Uint64())
 			if sendTransferInErr != nil {
-				log.Errorf("fail to transferIn, ev:%v, err:%v", tx, sendTransferInErr)
-				// TODO need to check this error, so we can process this transfer again
+				log.Errorf("fail to transferIn, ev:%+v, err:%v", tx, sendTransferInErr)
+				// if fail, let try again one time
+				time.Sleep(6 * time.Second)
+				sendTransferInAgainErr := bc.transferIn(tx.Receiver, tx.Token, newAmount, tx.HashLock, tx.TransferId, tx.RelatedTid, uint64(tx.TimeLock.Unix()), bc.chainId.Uint64())
+				if sendTransferInAgainErr != nil {
+					log.Errorf("fail to transferIn again, ev:%+v, err:%v", tx, sendTransferInAgainErr)
+				} else {
+					log.Infof("retry send transferIn success, transferIn id: %x", tx.TransferId)
+				}
 				continue
 			}
 		}
@@ -848,7 +869,7 @@ func (s *server) processTryConfirmTransfer() {
 				}
 
 				log.Infof("try confirm this tx, txId:%x, txType:%s", tx.TransferId, tx.TransferType.String())
-				err = dstBcg.confirm(tx.TransferId, tx.Preimage)
+				err = dstBcg.confirm(tx.TransferId, tx.RelatedTid, tx.Preimage, tx.HashLock)
 				if err != nil {
 					log.Errorf("fail to confirm related transfer, ev:%v, err:%v", tx, err)
 					continue
@@ -907,13 +928,32 @@ func (s *server) processTryRefundTransferIn() {
 				}
 
 				if relatedTransfer.Status == cbn.TransferStatus_TRANSFER_STATUS_CONFIRMED {
-					err = bc.confirm(tx.TransferId, relatedTransfer.Preimage)
+					err = bc.confirm(tx.TransferId, relatedTransfer.TransferId, relatedTransfer.Preimage, tx.HashLock)
 					if err != nil {
 						log.Errorf("fail to confirm this tx: %v", tx)
 						continue
 					}
 				} else {
-					err = bc.refund(tx.TransferId)
+					// for some chain, we may miss confirm info.
+					// here, we should check remote transfer out to make sure it is not confirmed.
+					// may be useless, as we can not directly get the preimage
+					transferOutBc, foundTransferOutBc := s.chainMap[relatedTransfer.ChainId]
+					if !foundTransferOutBc {
+						log.Errorf("fail to find transfer out bc, transferOutId:%x", relatedTransfer.TransferId)
+						continue
+					} else {
+						remoteTransferOut, getRemoteTransferOutErr := transferOutBc.getTransfer(relatedTransfer.TransferId)
+						if getRemoteTransferOutErr != nil {
+							log.Errorf("fail to get remoteTransferOut, transferOutId:%x, err:%v", relatedTransfer.TransferId, err)
+							continue
+						}
+						if remoteTransferOut.Status == remoteTransferStatusConfirmed {
+							log.Errorf("this remote transfer out is already confirmed, we should not refund it, transferOutId:%x", relatedTransfer.TransferId)
+							continue
+						}
+					}
+
+					err = bc.refund(tx.TransferId, tx.RelatedTid, tx.HashLock)
 					if err != nil {
 						log.Errorf("fail to refund this tx: %v", tx)
 						continue

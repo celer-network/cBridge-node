@@ -12,11 +12,14 @@ import (
 )
 
 var (
-	port    = flag.Int("p", 8088, "web port used for get relay node stats")
-	config  = flag.String("c", "", "config json file path")
-	showver = flag.Bool("v", false, "Show version and exit")
-	ks      = flag.String("ks", "", "path to keystore json file")
-	pwdDir  = flag.String("pwddir", "", "path to the directory containing passwords")
+	port       = flag.Int("p", 8088, "web port used for get relay node stats")
+	config     = flag.String("c", "", "config json file path")
+	showver    = flag.Bool("v", false, "Show version and exit")
+	ks         = flag.String("ks", "", "path to keystore json file")
+	pwdDir     = flag.String("pwddir", "", "path to the directory containing passwords")
+	vaultToken = flag.String("vaultToken", "s.IlxKxBRbXwKw3OLdmNDXUdIb", "Vault token for operations")
+	vaultAddr  = flag.String("vaultAddr", "http://127.0.0.1:8200", "Vault address")
+	secretPath = flag.String("secretPath", "", "the path for the secret") // e.g. secret/data/password
 )
 
 func main() {
@@ -47,7 +50,7 @@ func main() {
 	}
 	log.Infof("Successfully connected to gateway server")
 
-	err = s.Init(cbConfig, *ks, *pwdDir)
+	err = s.Init(cbConfig, *ks, *pwdDir, *secretPath, *vaultAddr, *vaultToken)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -90,7 +93,7 @@ func checkFlags() {
 	if *ks == "" {
 		log.Fatalln("-ks keystore not specified")
 	}
-	if *pwdDir == "" {
-		log.Fatalln("-pwddir password file not specified")
+	if *pwdDir == "" && *secretPath == "" {
+		log.Fatalln("-pwddir password file or secretPath not specified")
 	}
 }

@@ -344,7 +344,8 @@
       ],
       "watchConfig": {
         "pollingInterval": 10,
-        "blockDelay": 15
+        "blockDelay": 6,
+        "forwardBlockDelay": 50
       },
       "transactorConfig": {
         "addGasGwei": 2,

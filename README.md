@@ -196,7 +196,7 @@ If you have checked all of the above items, let's proceed to the relay node conf
 | OKExChain | 66 | 15 | 30 | 2000 | 0 | 0 | 2 | 0.3 |
 | Avalanche (C-Chain) | 43114 | 15 | 15 | 0 | 0 | 0 | 2 | 0.3 |
 | Optimism | 10 | 10 | 8 | 10000 | 0 | 50000000 | 2 | 0 |
-| Fantom | 250 | 10 | 15 | 0 | 0 | 0 | 2 | 0.3 |
+| Fantom | 250 | 10 | 6 | 0 | 50 | 0 | 2 | 0.3 |
 | huobichain | 128 | 15 | 15 | 5000 | 0 | 0 | 2 | 0.3 |
 
 #####Note: 

@@ -38,8 +38,10 @@ You can get these binary files in release page of this github repo.
 You can also get the binary by building from the sources. Please first make sure you have installed Golang (version 1.15+). Then under the root of this repo, execute
 
 ```sh
-go build -o cbridge-node ./server/main/
+make build
 ```
+
+The generated binary will be at `build/cbridge-node`. Copy it to a folder under your `$PATH`.
 
 ## Prepare an Ethereum Keystore File
 
@@ -85,7 +87,7 @@ If you have checked all of the above items, let's proceed to the relay node conf
                 // Specify the list of tokens the relay node supports on the chain
                 // NOTE: if you specify a token on the chain, the minimum balance requirement should be met
                 // otherwise the relay node may fail to operate
-                // Refer to https://cbridge-stat.s3.us-west-2.amazonaws.com/mainnet/chains-tokens.json 
+                // Refer to https://cbridge-stat.s3.us-west-2.amazonaws.com/mainnet/chains-tokens.json
                 // about the minimum balance requirement for each chain and token
                 {
                     "tokenName": "USDT",
@@ -179,7 +181,7 @@ If you have checked all of the above items, let's proceed to the relay node conf
                 "addGasEstimateRatio": 0.3
             }
         }
-    ], 
+    ],
     "db": "127.0.0.1:26257", // CockroachDB RPC url
     "gateway": "cbridge-api.celer.network:8081" //cBridge gateway server url
 }
@@ -199,9 +201,9 @@ If you have checked all of the above items, let's proceed to the relay node conf
 | Fantom | 250 | 10 | 15 | 0 | 0 | 0 | 2 | 0.3 |
 | huobichain | 128 | 15 | 15 | 5000 | 0 | 0 | 2 | 0.3 |
 
-#####Note: 
+#####Note:
 ######(1) For Arbitrum, BlockDelay:8 and ForwardBlockDelay: 500 is Recommended, this will help relay node do not skip any Arbitrum Event, otherwise your transfer may finished with refunded at the end.
-######(2) AddGasGwei will help your onchain-tx process faster, and the gas cost may be higher. You can decide this config value. For example, we recommend you use "add 10 gwei", otherwise eth may not accept your tx at once, it may task more than hours to accept your tx which may cause the transfer cancelled. 
+######(2) AddGasGwei will help your onchain-tx process faster, and the gas cost may be higher. You can decide this config value. For example, we recommend you use "add 10 gwei", otherwise eth may not accept your tx at once, it may task more than hours to accept your tx which may cause the transfer cancelled.
 
 ## Start Your Relay Node
 

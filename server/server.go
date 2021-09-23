@@ -388,14 +388,14 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 				return true
 			}
 
-			// save transfer in
-			chain2TimeLock := tsNow.Add(time.Duration((int64(ev.Timelock)-tsNow.Unix())*5/6) * time.Second)
-			if chain2TimeLock.After(time.Unix(int64(ev.Timelock-60*3), 0)) {
-				// here a 180s safe margin to keep transferIn time lock at least diff transferOut timeout 60s.
-				// We will record this transfer in, but this transfer in will never be processed.
-				// Because this time lock is expired.
-				log.Warnln("this transfer out is invalid, the chain2 time lock is not valid", ev, chain2TimeLock, time.Unix(int64(ev.Timelock), 0))
+			timeout := int64(ev.Timelock) - tsNow.Unix()
+			if timeout < 18000 { // src timeout should be larger than 5 hours
+				log.Errorf("src transfer out timeout too small: %d sec", timeout)
+				return false
 			}
+			// dst timeout should be 2 hour smaller than src
+			chain2TimeLock := tsNow.Add(time.Duration(timeout-7200) * time.Second)
+			// save transfer in
 			transferInId := getTransferId(ev.Receiver, ev.DstAddress, ev.Hashlock, ev.DstChainId)
 			log.Infof("save transfer in, transferInId:%x", transferInId)
 			dbErr = s.db.InsertTransfer(&Transfer{

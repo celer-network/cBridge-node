@@ -245,9 +245,8 @@ func (d *DAL) GetAllStartTransferIn() ([]*Transfer, error) {
 }
 
 func (d *DAL) GetAllConfirmableLockedTransfer() ([]*Transfer, error) {
-	//TODO time lock may be is not needed
-	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and timelock > $2 and preimage is not null and preimage != '' and preimage != $3", transferAllColumns)
-	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, time.Now().Add(timeLockSafeMargin), Hash{}.String())
+	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and preimage is not null and preimage != '' and preimage != $2", transferAllColumns)
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, Hash{}.String())
 	if err != nil {
 		return nil, err
 	}

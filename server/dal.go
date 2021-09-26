@@ -324,7 +324,7 @@ func (d *DAL) GetRecoverTimeoutPendingRefund() ([]*Transfer, error) {
 
 func (d *DAL) GetAllRefundAbleTransferIn() ([]*Transfer, error) {
 	q := fmt.Sprintf(`SELECT %s from transfer where status = $1 and timelock < $2 and transfertype = $3`, transferAllColumns)
-	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, time.Now().Add(-1*refundSafeMargin), cbn.TransferType_TRANSFER_TYPE_IN)
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, time.Now(), cbn.TransferType_TRANSFER_TYPE_IN)
 	if err != nil {
 		return nil, err
 	}

@@ -389,12 +389,12 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 			}
 
 			timeout := int64(ev.Timelock) - tsNow.Unix()
-			if timeout < 18000 { // src timeout should be larger than 5 hours
+			if timeout < (3600 * 23) { // src timeout should be larger than 23 hours
 				log.Errorf("src transfer out timeout too small: %d sec", timeout)
 				return false
 			}
 			// dst timeout should be 2 hour smaller than src
-			chain2TimeLock := tsNow.Add(time.Duration(timeout-7200) * time.Second)
+			chain2TimeLock := tsNow.Add(time.Duration(timeout-(8*3600)) * time.Second)
 			// save transfer in
 			transferInId := getTransferId(ev.Receiver, ev.DstAddress, ev.Hashlock, ev.DstChainId)
 			log.Infof("save transfer in, transferInId:%x", transferInId)

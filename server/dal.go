@@ -115,7 +115,7 @@ func (d *DAL) InsertTransfer(tx *Transfer) error {
 	q := fmt.Sprintf("INSERT INTO transfer (%s) VALUES (%s) ON CONFLICT DO NOTHING", transferAllColumns, transferAllColumnParams)
 	_, err := d.Exec(q, tx.TransferId.String(), tx.TxHash.String(), tx.ChainId, tx.Token.String(), tx.TransferType,
 		tx.TimeLock, tx.HashLock.String(), tx.Status, tx.RelatedTid.String(), tx.RelatedChainId, tx.RelatedToken.String(), tx.Amount.String(),
-		tx.Fee.String(), tx.TransferGasCost.String(), tx.ConfirmGasCost.String(), tx.ConfirmGasCost.String(), tx.Preimage.String(), tx.Sender.String(), tx.Receiver.String(), tx.TxConfirmHash.String(),
+		tx.Fee.String(), tx.TransferGasCost.String(), tx.ConfirmGasCost.String(), tx.RefundGasCost.String(), "", tx.Sender.String(), tx.Receiver.String(), tx.TxConfirmHash.String(),
 		tx.TxRefundHash.String(), tsNow, tsNow)
 	return err
 }
@@ -245,8 +245,8 @@ func (d *DAL) GetAllStartTransferIn() ([]*Transfer, error) {
 }
 
 func (d *DAL) GetAllConfirmableLockedTransfer() ([]*Transfer, error) {
-	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and preimage is not null and preimage != '' and preimage != $2", transferAllColumns)
-	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, Hash{}.String())
+	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and preimage is not null and preimage != ''", transferAllColumns)
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED)
 	if err != nil {
 		return nil, err
 	}

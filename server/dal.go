@@ -228,7 +228,7 @@ func (d *DAL) GetAllTransfersWithLimit(limit uint64) ([]*Transfer, error) {
 
 func (d *DAL) GetAllStartTransferIn() ([]*Transfer, error) {
 	q := fmt.Sprintf("SELECT %s from transfer where status = $1 and timelock > $2 and transfertype = $3", transferAllColumns)
-	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_START, time.Now().Add(timeLockSafeMargin), cbn.TransferType_TRANSFER_TYPE_IN)
+	rows, err := d.Query(q, cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_START, time.Now().Add(1 * time.Hour), cbn.TransferType_TRANSFER_TYPE_IN)
 	if err != nil {
 		return nil, err
 	}

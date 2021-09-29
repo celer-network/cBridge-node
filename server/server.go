@@ -827,12 +827,12 @@ func (s *server) processTrySendTransferIn() {
 				continue
 			}
 
-			sendTransferInErr := bc.transferIn(tx.Receiver, tx.Token, newAmount, tx.HashLock, tx.TransferId, tx.RelatedTid, uint64(tx.TimeLock.Unix()), bc.chainId.Uint64())
+			sendTransferInErr := bc.transferIn(tx.Receiver, tx.Token, newAmount, tx.HashLock, tx.TransferId, tx.RelatedTid, uint64(tx.TimeLock.Unix()), tx.RelatedChainId)
 			if sendTransferInErr != nil {
 				log.Errorf("fail to transferIn, ev:%+v, err:%v", tx, sendTransferInErr)
 				// if fail, let try again one time
 				time.Sleep(6 * time.Second)
-				sendTransferInAgainErr := bc.transferIn(tx.Receiver, tx.Token, newAmount, tx.HashLock, tx.TransferId, tx.RelatedTid, uint64(tx.TimeLock.Unix()), bc.chainId.Uint64())
+				sendTransferInAgainErr := bc.transferIn(tx.Receiver, tx.Token, newAmount, tx.HashLock, tx.TransferId, tx.RelatedTid, uint64(tx.TimeLock.Unix()), tx.RelatedChainId)
 				if sendTransferInAgainErr != nil {
 					log.Errorf("fail to transferIn again, ev:%+v, err:%v", tx, sendTransferInAgainErr)
 				} else {

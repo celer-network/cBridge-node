@@ -532,7 +532,7 @@ func (s *server) Close() {
 func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLock, transferId, srcTransferId Hash, timeLock, srcChainId uint64) error {
 	log.Infof("start transfer in, transferId:%x, chainId:%d, srcTransferId:%x, hashLock:%x", transferId, bc.chainId.Uint64(), srcTransferId, hashLock)
 	_, err := bc.trans.Transact(
-		logTransactionStateHandler(fmt.Sprintf("receipt transferIn, transferId: %x", transferId)),
+		logTransactionStateHandler(fmt.Sprintf("receipt transferIn, transferId: %x, chainId: %s", transferId, bc.chainId)),
 		func(ctr bind.ContractTransactor, opts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 			cbt, err2 := contracts.NewCBridgeTransactor(bc.contractChain.GetAddr(), ctr)
 			if err2 != nil {
@@ -547,7 +547,7 @@ func (bc *bridgeConfig) transferIn(dstAddr, token Addr, amount *big.Int, hashLoc
 func (bc *bridgeConfig) confirm(transferId, srcTransferId, preImage, hashLock Hash) error {
 	log.Infof("start confirm, transferId:%x, chainId:%d, srcTransferId:%x, hashLock:%x", transferId, bc.chainId.Uint64(), srcTransferId, hashLock)
 	_, err := bc.trans.Transact(
-		logTransactionStateHandler(fmt.Sprintf("receipt confirm, transferId: %s", transferId.String())),
+		logTransactionStateHandler(fmt.Sprintf("receipt confirm, transferId: %x, chainId: %s", transferId, bc.chainId)),
 		func(ctr bind.ContractTransactor, opts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 			cbt, err2 := contracts.NewCBridgeTransactor(bc.contractChain.GetAddr(), ctr)
 			if err2 != nil {
@@ -955,7 +955,7 @@ func (s *server) processTryRefundTransferIn() {
 
 					err = bc.refund(tx.TransferId, tx.RelatedTid, tx.HashLock)
 					if err != nil {
-						log.Errorf("fail to refund this tx: %v", tx)
+						log.Errorf("fail to refund this tx: %v, err:%v", tx, err)
 						continue
 					}
 				}

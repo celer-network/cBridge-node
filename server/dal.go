@@ -139,8 +139,9 @@ func (d *DAL) RefundTransfer(tid, txRefundHash Hash) error {
 }
 
 func (d *DAL) RecordTransferIn(tid, txHash Hash) error {
-	q := `UPDATE transfer SET status = $1, txhash = $2 WHERE tid = $3`
-	_, err := d.Exec(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, txHash.String(), tid.String())
+	q := `UPDATE transfer SET status = $1, txhash = $2 WHERE tid = $3 and status in ($4,$5)`
+	_, err := d.Exec(q, cbn.TransferStatus_TRANSFER_STATUS_LOCKED, txHash.String(), tid.String(),
+		cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_START, cbn.TransferStatus_TRANSFER_STATUS_TRANSFER_IN_PENDING)
 	return err
 }
 

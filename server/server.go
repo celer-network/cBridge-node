@@ -389,7 +389,7 @@ func (s *server) monitorLogTransferOut(bc *bridgeConfig) (monitor.CallbackID, er
 			}
 
 			timeout := int64(ev.Timelock) - tsNow.Unix()
-			if timeout < (3600 * 23) { // src timeout should be larger than 23 hours
+			if timeout < 3600*16 { // src timeout should be larger than 16 hours
 				log.Errorf("src transfer out timeout too small: %d sec", timeout)
 				return false
 			}

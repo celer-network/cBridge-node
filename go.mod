@@ -3,7 +3,7 @@ module github.com/celer-network/cBridge-go
 go 1.15
 
 require (
-	github.com/celer-network/goutils v0.1.37
+	github.com/celer-network/goutils v0.1.38
 	github.com/ethereum/go-ethereum v1.10.9
 	github.com/julienschmidt/httprouter v1.2.0
 	github.com/miguelmota/go-solidity-sha3 v0.1.1

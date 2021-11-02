@@ -595,7 +595,8 @@ func (bc *bridgeConfig) getTransfer(transferId Hash) (*TransferInfo, error) {
 		return nil, err
 	}
 
-	transfer, err := cbcall.Transfers(&bind.CallOpts{Pending: true}, transferId)
+	safeBlkNum := bc.mon.GetCurrentBlockNumber().Uint64() - bc.config.GetWatchConfig().GetBlockDelay()
+	transfer, err := cbcall.Transfers(&bind.CallOpts{BlockNumber: new(big.Int).SetUint64(safeBlkNum)}, transferId)
 	if err != nil {
 		return nil, err
 	}

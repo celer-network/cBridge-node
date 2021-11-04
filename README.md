@@ -191,7 +191,7 @@ If you have checked all of the above items, let's proceed to the relay node conf
 | ChainName | ChainId | PollingInterval | BlockDelay | MaxBlockDelta | ForwardBlockDelay | GasLimit | AddGasGwei | AddGasEstimateRatio |
 | --- | --- | --- | --- | --- | --- |  --- |  --- |  --- |
 | Ethereum mainnet | 1 | 15 | 8 | 0 | 0 | 0 | 10 | 0.3 |
-| BSC | 56 | 10 | 8 | 5000 | 0 | 0 | 2 | 0.3 |
+| BSC | 56 | 15 | 12 | 5000 | 0 | 0 | 2 | 0.3 |
 | Arbitrum | 42161 | 10 | 8 | 0 | 500 | 3200000 | 2 | 0 |
 | Polygon | 137 | 15 | 80 | 1000 | 0 | 0 | 50 | 0.3 |
 | xDai | 100 | 15 | 15 | 0 | 0 | 0 | 2 | 0.3 |

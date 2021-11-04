@@ -98,8 +98,8 @@
         }
       ],
       "watchConfig": {
-        "pollingInterval": 10,
-        "blockDelay": 8,
+        "pollingInterval": 15,
+        "blockDelay": 12,
         "maxBlockDelta": 5000
       },
       "transactorConfig": {
